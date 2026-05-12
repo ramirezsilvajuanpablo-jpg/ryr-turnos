@@ -67,10 +67,8 @@ export default function SalaPage({ params }: { params: Promise<{ id: string }> }
       const data: EstadoAPI = await res.json()
       setEstado(data)
 
-      // Mostrar llamado si es de esta sala O si es ruta completa (aparece en ambas pantallas)
-      const esDeEstaSala = data.ultimoLlamado?.sala === salaNum
-      const esCompleta = (data.ultimoLlamado?.tipo ?? 'simple') === 'completa'
-      const llamadoDeSala = (esDeEstaSala || esCompleta) ? data.ultimoLlamado : null
+      // Ambas pantallas muestran la misma información — sin filtro por sala
+      const llamadoDeSala = data.ultimoLlamado
 
       if (llamadoDeSala && llamadoDeSala.timestamp !== ultimoTimestampRef.current) {
         ultimoTimestampRef.current = llamadoDeSala.timestamp
@@ -104,10 +102,8 @@ export default function SalaPage({ params }: { params: Promise<{ id: string }> }
     return () => clearInterval(t)
   }, [])
 
-  // Historial: incluir llamados de esta sala + ruta completa
-  const historialSala = (estado?.historial ?? [])
-    .filter(h => h.sala === salaNum || (h.tipo ?? 'simple') === 'completa')
-    .slice(0, 6)
+  // Historial universal — ambas pantallas muestran todos los llamados
+  const historialSala = (estado?.historial ?? []).slice(0, 6)
   const esperando = estado?.pacientes.filter(p => p.sala === salaNum && p.estado === 'esperando').length ?? 0
   const pisoSala = salaNum === 1 ? 1 : 2
   const salaLabel = salaNum === 1 ? 'SALA DE ESPERA – PISO 1' : 'SALA DE ESPERA – PISO 2'

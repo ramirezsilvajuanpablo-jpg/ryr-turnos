@@ -16,8 +16,8 @@ export default function Home() {
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-100">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-4">
-          <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-white border border-gray-100 p-1 shadow-sm flex-shrink-0">
-            <Image src="/logo-ryr.png" alt="R&R" fill className="object-contain" />
+          <div className="w-14 h-14 rounded-xl overflow-hidden bg-white border border-gray-100 p-1 shadow-sm flex-shrink-0 flex items-center justify-center">
+            <Image src="/logo-ryr.png" alt="R&R" width={56} height={56} className="object-contain" />
           </div>
           <div>
             <h1 className="text-xl font-black text-ryr-blue leading-none">R&amp;R</h1>
