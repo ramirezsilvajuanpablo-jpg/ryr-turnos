@@ -101,15 +101,25 @@ export default function ConsultorioPage({ params }: { params: Promise<{ id: stri
   const pacienteActual = estado?.pacientes.find(
     p => p.consultoioId === id && (p.estado === 'llamado' || p.estado === 'en_atencion')
   )
-  const enEspera = estado?.pacientes
-    .filter(p => p.sala === (consultorio?.sala ?? 1) && p.estado === 'esperando')
-    .sort((a, b) => new Date(a.horaIngreso).getTime() - new Date(b.horaIngreso).getTime()) ?? []
 
+  // Cola: pacientes simples de esta sala + pacientes completa que no han visitado este consultorio
+  const enEspera: Paciente[] = (estado?.pacientes ?? [])
+    .filter(p => {
+      if (p.estado !== 'esperando') return false
+      const visitados = p.consultoriosVisitados ?? []
+      if (visitados.includes(id)) return false
+      if ((p.tipo ?? 'simple') === 'completa') return true
+      return p.sala === (consultorio?.sala ?? 1)
+    })
+    .sort((a, b) => new Date(a.horaIngreso).getTime() - new Date(b.horaIngreso).getTime())
+
+  const totalActivos = estado?.consultorios.filter(c => c.activo).length ?? 6
   const esPisoUno = (consultorio?.piso ?? 1) === 1
-  const pisoColor = esPisoUno ? 'text-ryr-orange' : 'text-ryr-teal'
-  const pisoBg = esPisoUno ? 'bg-ryr-orange' : 'bg-ryr-teal'
-  const pisoBgDark = esPisoUno ? 'bg-ryr-orange-dark' : 'bg-ryr-teal-dark'
-  const pisoBorder = esPisoUno ? 'border-ryr-orange' : 'border-ryr-teal'
+  const headerBg = esPisoUno ? 'bg-ryr-orange' : 'bg-ryr-teal'
+  const accentColor = esPisoUno ? 'text-ryr-orange' : 'text-ryr-teal'
+  const accentBg = esPisoUno ? 'bg-ryr-orange' : 'bg-ryr-teal'
+  const accentBorder = esPisoUno ? 'border-ryr-orange' : 'border-ryr-teal'
+  const accentLight = esPisoUno ? 'bg-ryr-orange/10' : 'bg-ryr-teal/10'
 
   if (!estado) {
     return (
@@ -132,8 +142,7 @@ export default function ConsultorioPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className={`${pisoBg} text-white shadow-lg`}>
+      <header className={`${headerBg} text-white shadow-lg`}>
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
           <Link href="/" className="text-white/70 hover:text-white transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -173,7 +182,7 @@ export default function ConsultorioPage({ params }: { params: Promise<{ id: stri
         )}
 
         {/* Paciente actual */}
-        <div className={`card border-l-4 ${pacienteActual ? pisoBorder : 'border-gray-200'}`}>
+        <div className={`card border-l-4 ${pacienteActual ? accentBorder : 'border-gray-200'}`}>
           <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">
             Paciente en atención
           </h2>
@@ -181,17 +190,43 @@ export default function ConsultorioPage({ params }: { params: Promise<{ id: stri
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
                 <div className="flex items-center gap-3 mb-1">
-                  <span className={`text-4xl font-black ${pisoColor}`}>{pacienteActual.turno}</span>
+                  <span className={`text-4xl font-black ${accentColor}`}>{pacienteActual.turno}</span>
                   <span className="badge-llamado animate-pulse">En atención</span>
+                  {(pacienteActual.tipo ?? 'simple') === 'completa' && (
+                    <span className="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                      Ruta completa · {(pacienteActual.consultoriosVisitados?.length ?? 0) + 1}/{totalActivos}
+                    </span>
+                  )}
                 </div>
                 <p className="text-2xl font-bold text-gray-800">{pacienteActual.nombre}</p>
                 {pacienteActual.horaLlamado && (
                   <p className="text-sm text-gray-400 mt-1">Llamado a las {horaLocal(pacienteActual.horaLlamado)}</p>
                 )}
+                {(pacienteActual.tipo ?? 'simple') === 'completa' && pacienteActual.consultoriosVisitados.length > 0 && (
+                  <div className="mt-2 flex gap-1 flex-wrap">
+                    {pacienteActual.consultoriosVisitados.map(cid => {
+                      const c = estado?.consultorios.find(x => x.id === cid)
+                      return c ? (
+                        <span key={cid} className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full line-through">
+                          {c.nombre}
+                        </span>
+                      ) : null
+                    })}
+                  </div>
+                )}
               </div>
-              <button onClick={finalizarAtencion} disabled={cargando} className="btn-danger disabled:opacity-50">
-                Finalizar atención
-              </button>
+              <div className="flex flex-col gap-2">
+                <button onClick={finalizarAtencion} disabled={cargando} className="btn-danger disabled:opacity-50">
+                  Finalizar atención
+                  {(pacienteActual.tipo ?? 'simple') === 'completa' && (
+                    <span className="block text-xs font-normal opacity-80">
+                      {(pacienteActual.consultoriosVisitados?.length ?? 0) + 1 < totalActivos
+                        ? `→ regresa a sala de espera`
+                        : `→ atención completa`}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
           ) : (
             <div className="text-center py-6">
@@ -209,35 +244,46 @@ export default function ConsultorioPage({ params }: { params: Promise<{ id: stri
         <button
           onClick={llamarSiguiente}
           disabled={cargando || enEspera.length === 0}
-          className={`w-full py-5 ${pisoBg} hover:${pisoBgDark} disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-xl shadow-lg hover:shadow-xl transition-all duration-200 active:scale-98`}
+          className={`w-full py-5 ${accentBg} disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-xl shadow-lg hover:shadow-xl transition-all duration-200 active:scale-98`}
         >
-          {cargando ? 'Llamando...' : enEspera.length === 0 ? 'Sin pacientes en espera' : `Llamar Siguiente Paciente`}
+          {cargando ? 'Llamando...' : enEspera.length === 0 ? 'Sin pacientes en espera' : 'Llamar Siguiente Paciente'}
         </button>
 
-        {/* Lista de espera */}
+        {/* Cola */}
         {enEspera.length > 0 && (
           <div className="card">
             <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">
-              Cola de espera – Piso {consultorio.piso}
+              Cola de espera – {consultorio.nombre}
             </h2>
             <div className="space-y-2">
-              {enEspera.map((p, i) => (
-                <div key={p.id} className="flex items-center gap-3 bg-gray-50 hover:bg-gray-100 rounded-xl px-4 py-3 transition-colors group">
-                  <span className="text-xl font-black text-gray-300 w-6 text-center">{i + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <span className={`font-bold mr-2 ${pisoColor}`}>{p.turno}</span>
-                    <span className="font-semibold text-gray-700">{p.nombre}</span>
-                    <span className="block text-xs text-gray-400 mt-0.5">{tiempoEspera(p.horaIngreso)}</span>
+              {enEspera.map((p, i) => {
+                const esCompleta = (p.tipo ?? 'simple') === 'completa'
+                const visitados = p.consultoriosVisitados?.length ?? 0
+                return (
+                  <div key={p.id} className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-colors group ${esCompleta ? 'bg-purple-50 hover:bg-purple-100' : 'bg-gray-50 hover:bg-gray-100'}`}>
+                    <span className={`text-xl font-black w-6 text-center ${esCompleta ? 'text-purple-200' : 'text-gray-300'}`}>{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`font-bold ${esCompleta ? 'text-purple-600' : accentColor}`}>{p.turno}</span>
+                        <span className="font-semibold text-gray-700">{p.nombre}</span>
+                        {esCompleta && (
+                          <span className="text-xs bg-purple-100 text-purple-600 font-bold px-1.5 py-0.5 rounded-full">
+                            {visitados}/{totalActivos}
+                          </span>
+                        )}
+                      </div>
+                      <span className="block text-xs text-gray-400 mt-0.5">{tiempoEspera(p.horaIngreso)}</span>
+                    </div>
+                    <button
+                      onClick={() => llamarEspecifico(p.id)}
+                      disabled={cargando}
+                      className={`opacity-0 group-hover:opacity-100 transition-opacity text-sm py-1.5 px-3 rounded-xl font-semibold text-white disabled:opacity-50 ${esCompleta ? 'bg-purple-600' : accentBg}`}
+                    >
+                      Llamar
+                    </button>
                   </div>
-                  <button
-                    onClick={() => llamarEspecifico(p.id)}
-                    disabled={cargando}
-                    className={`opacity-0 group-hover:opacity-100 transition-opacity text-sm py-1.5 px-3 rounded-xl font-semibold text-white disabled:opacity-50 ${pisoBg}`}
-                  >
-                    Llamar
-                  </button>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}

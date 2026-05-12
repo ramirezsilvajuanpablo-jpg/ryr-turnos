@@ -3,6 +3,8 @@ export interface Paciente {
   nombre: string
   turno: string
   sala: 1 | 2
+  tipo: 'simple' | 'completa'
+  consultoriosVisitados: string[]
   estado: 'esperando' | 'llamado' | 'en_atencion' | 'atendido'
   consultoioId?: string
   horaIngreso: string
@@ -24,6 +26,7 @@ export interface UltimoLlamado {
   consultorioNombre: string
   sala: 1 | 2
   piso: 1 | 2
+  tipo: 'simple' | 'completa'
   timestamp: string
 }
 

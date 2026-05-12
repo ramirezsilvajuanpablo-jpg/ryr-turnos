@@ -15,6 +15,7 @@ export default function Admin() {
   const [videoUrl, setVideoUrl] = useState('')
   const [confirmReset, setConfirmReset] = useState(false)
   const [msg, setMsg] = useState('')
+  const [, setEditando] = useState<string | null>(null)
 
   const cargar = useCallback(async () => {
     try {
@@ -43,8 +44,6 @@ export default function Admin() {
     setTimeout(() => setMsg(''), 3000)
     cargar()
   }
-
-  const [editando, setEditando] = useState<string | null>(null)
 
   async function guardarVideo() {
     await fetch('/api/media', {

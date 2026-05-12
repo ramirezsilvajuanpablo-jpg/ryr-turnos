@@ -4,6 +4,15 @@ import { useState, useEffect, useCallback, useRef, use } from 'react'
 import Image from 'next/image'
 import type { UltimoLlamado, EstadoAPI } from '@/lib/types'
 
+function toggleFullscreen() {
+  if (typeof document === 'undefined') return
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {})
+  } else {
+    document.exitFullscreen().catch(() => {})
+  }
+}
+
 function horaLocal(iso: string) {
   return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
 }
@@ -58,7 +67,10 @@ export default function SalaPage({ params }: { params: Promise<{ id: string }> }
       const data: EstadoAPI = await res.json()
       setEstado(data)
 
-      const llamadoDeSala = data.ultimoLlamado?.sala === salaNum ? data.ultimoLlamado : null
+      // Mostrar llamado si es de esta sala O si es ruta completa (aparece en ambas pantallas)
+      const esDeEstaSala = data.ultimoLlamado?.sala === salaNum
+      const esCompleta = (data.ultimoLlamado?.tipo ?? 'simple') === 'completa'
+      const llamadoDeSala = (esDeEstaSala || esCompleta) ? data.ultimoLlamado : null
 
       if (llamadoDeSala && llamadoDeSala.timestamp !== ultimoTimestampRef.current) {
         ultimoTimestampRef.current = llamadoDeSala.timestamp
@@ -92,7 +104,10 @@ export default function SalaPage({ params }: { params: Promise<{ id: string }> }
     return () => clearInterval(t)
   }, [])
 
-  const historialSala = estado?.historial.filter(h => h.sala === salaNum).slice(0, 6) ?? []
+  // Historial: incluir llamados de esta sala + ruta completa
+  const historialSala = (estado?.historial ?? [])
+    .filter(h => h.sala === salaNum || (h.tipo ?? 'simple') === 'completa')
+    .slice(0, 6)
   const esperando = estado?.pacientes.filter(p => p.sala === salaNum && p.estado === 'esperando').length ?? 0
   const pisoSala = salaNum === 1 ? 1 : 2
   const salaLabel = salaNum === 1 ? 'SALA DE ESPERA – PISO 1' : 'SALA DE ESPERA – PISO 2'
@@ -125,9 +140,20 @@ export default function SalaPage({ params }: { params: Promise<{ id: string }> }
           </p>
         </div>
 
-        <div className="text-right">
-          <p className="font-mono text-white text-3xl font-black tracking-widest">{hora}</p>
-          <p className="text-blue-300 text-xs capitalize mt-0.5">{fecha}</p>
+        <div className="text-right flex items-center gap-3">
+          <button
+            onClick={toggleFullscreen}
+            title="Pantalla completa"
+            className="text-white/50 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/10"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+            </svg>
+          </button>
+          <div>
+            <p className="font-mono text-white text-3xl font-black tracking-widest">{hora}</p>
+            <p className="text-blue-300 text-xs capitalize mt-0.5">{fecha}</p>
+          </div>
         </div>
       </header>
 

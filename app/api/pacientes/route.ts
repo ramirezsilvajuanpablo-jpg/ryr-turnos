@@ -11,7 +11,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { nombre, sala } = body as { nombre: string; sala: 1 | 2 }
+  const { nombre, sala, tipo } = body as { nombre: string; sala: 1 | 2; tipo?: 'simple' | 'completa' }
 
   if (!nombre?.trim()) {
     return NextResponse.json({ error: 'Nombre requerido' }, { status: 400 })
@@ -19,12 +19,15 @@ export async function POST(req: NextRequest) {
 
   const numero = await incrementarContador()
   const turno = `A${String(numero).padStart(3, '0')}`
+  const rutaTipo = tipo ?? 'simple'
 
   const paciente: Paciente = {
     id: crypto.randomUUID(),
     nombre: nombre.trim().toUpperCase(),
     turno,
-    sala,
+    sala: rutaTipo === 'completa' ? 1 : sala,
+    tipo: rutaTipo,
+    consultoriosVisitados: [],
     estado: 'esperando',
     horaIngreso: new Date().toISOString(),
   }
@@ -37,7 +40,6 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
-
   await actualizarPaciente(id, { estado: 'atendido' })
   return NextResponse.json({ success: true })
 }
