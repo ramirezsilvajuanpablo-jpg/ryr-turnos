@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, use } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import type { UltimoLlamado, EstadoAPI } from '@/lib/types'
 
@@ -51,8 +51,8 @@ const SERVICIOS_PISO: Record<1 | 2, string[]> = {
   2: ['Optometría', 'Fonoaudiología', 'Enfermería'],
 }
 
-export default function SalaPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function SalaPage({ params }: { params: { id: string } }) {
+  const { id } = params
   const salaNum = Number(id) as 1 | 2
   const [estado, setEstado] = useState<EstadoAPI | null>(null)
   const [ultimo, setUltimo] = useState<UltimoLlamado | null>(null)

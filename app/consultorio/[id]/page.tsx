@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, use } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import type { Paciente, Consultorio, EstadoAPI } from '@/lib/types'
@@ -15,8 +15,8 @@ function tiempoEspera(iso: string) {
   return `${mins} min esperando`
 }
 
-export default function ConsultorioPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function ConsultorioPage({ params }: { params: { id: string } }) {
+  const { id } = params
   const [estado, setEstado] = useState<EstadoAPI | null>(null)
   const [cargando, setCargando] = useState(false)
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
