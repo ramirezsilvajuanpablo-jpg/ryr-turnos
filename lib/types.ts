@@ -13,6 +13,7 @@ export interface Consultorio {
   id: string
   nombre: string
   sala: 1 | 2
+  piso: 1 | 2
   doctor: string
   activo: boolean
 }
@@ -22,7 +23,12 @@ export interface UltimoLlamado {
   nombre: string
   consultorioNombre: string
   sala: 1 | 2
+  piso: 1 | 2
   timestamp: string
+}
+
+export interface MediaConfig {
+  videoUrl: string
 }
 
 export interface EstadoAPI {
@@ -30,4 +36,5 @@ export interface EstadoAPI {
   consultorios: Consultorio[]
   ultimoLlamado: UltimoLlamado | null
   historial: UltimoLlamado[]
+  media: MediaConfig
 }

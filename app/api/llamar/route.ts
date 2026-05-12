@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
     nombre: paciente.nombre,
     consultorioNombre: consultorio.nombre,
     sala: consultorio.sala,
+    piso: consultorio.piso,
     timestamp: ahora,
   }
 

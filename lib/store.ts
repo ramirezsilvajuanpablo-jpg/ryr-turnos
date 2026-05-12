@@ -1,11 +1,15 @@
-import type { Paciente, Consultorio, UltimoLlamado } from './types'
+import type { Paciente, Consultorio, UltimoLlamado, MediaConfig } from './types'
 
 const DEFAULT_CONSULTORIOS: Consultorio[] = [
-  { id: '1', nombre: 'Consultorio 1 - Medicina', sala: 1, doctor: 'Médico 1', activo: true },
-  { id: '2', nombre: 'Consultorio 2 - Medicina', sala: 1, doctor: 'Médico 2', activo: true },
-  { id: '3', nombre: 'Optometría 1', sala: 2, doctor: 'Optómetra 1', activo: true },
-  { id: '4', nombre: 'Optometría 2', sala: 2, doctor: 'Optómetra 2', activo: true },
+  { id: '1', nombre: 'Psicología',           sala: 1, piso: 1, doctor: 'Psicólogo/a',          activo: true },
+  { id: '2', nombre: 'Medicina Ocupacional', sala: 1, piso: 1, doctor: 'Médico Ocupacional',    activo: true },
+  { id: '3', nombre: 'Laboratorio Clínico',  sala: 1, piso: 1, doctor: 'Laboratorista',         activo: true },
+  { id: '4', nombre: 'Optometría',           sala: 2, piso: 2, doctor: 'Optómetra',             activo: true },
+  { id: '5', nombre: 'Fonoaudiología',       sala: 2, piso: 2, doctor: 'Fonoaudiólogo/a',       activo: true },
+  { id: '6', nombre: 'Enfermería',           sala: 2, piso: 2, doctor: 'Enfermero/a',           activo: true },
 ]
+
+const DEFAULT_MEDIA: MediaConfig = { videoUrl: '' }
 
 // ──────────────────────────────────────────────────────────────
 // In-memory store (dev / fallback)
@@ -18,6 +22,7 @@ declare global {
     consultorios: Consultorio[]
     ultimo: UltimoLlamado | null
     historial: UltimoLlamado[]
+    media: MediaConfig
   } | undefined
 }
 
@@ -29,6 +34,7 @@ function mem() {
       consultorios: JSON.parse(JSON.stringify(DEFAULT_CONSULTORIOS)),
       ultimo: null,
       historial: [],
+      media: { ...DEFAULT_MEDIA },
     }
   }
   return global.__ryr
@@ -38,11 +44,12 @@ function mem() {
 // KV helpers (only imported when env vars are present)
 // ──────────────────────────────────────────────────────────────
 const KV_KEYS = {
-  pacientes:   'ryr:pacientes',
-  contador:    'ryr:contador',
-  consultorios:'ryr:consultorios',
-  ultimo:      'ryr:ultimo',
-  historial:   'ryr:historial',
+  pacientes:    'ryr:pacientes',
+  contador:     'ryr:contador',
+  consultorios: 'ryr:consultorios',
+  ultimo:       'ryr:ultimo',
+  historial:    'ryr:historial',
+  media:        'ryr:media',
 } as const
 
 const useKV = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN)
@@ -116,6 +123,23 @@ export async function getHistorial(): Promise<UltimoLlamado[]> {
     return (await db.lrange<UltimoLlamado>(KV_KEYS.historial, 0, 14)) ?? []
   }
   return mem().historial.slice(0, 15)
+}
+
+export async function getMediaConfig(): Promise<MediaConfig> {
+  if (useKV) {
+    const db = await kv()
+    return (await db.get<MediaConfig>(KV_KEYS.media)) ?? DEFAULT_MEDIA
+  }
+  return mem().media
+}
+
+export async function setMediaConfig(media: MediaConfig): Promise<void> {
+  if (useKV) {
+    const db = await kv()
+    await db.set(KV_KEYS.media, media)
+  } else {
+    mem().media = media
+  }
 }
 
 export async function agregarPaciente(paciente: Paciente): Promise<void> {

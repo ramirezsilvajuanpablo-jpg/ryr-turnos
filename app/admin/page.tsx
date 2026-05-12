@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import type { Consultorio, EstadoAPI } from '@/lib/types'
 
 function horaLocal(iso: string) {
@@ -11,16 +12,17 @@ function horaLocal(iso: string) {
 export default function Admin() {
   const [estado, setEstado] = useState<EstadoAPI | null>(null)
   const [consultorios, setConsultorios] = useState<Consultorio[]>([])
-  const [editando, setEditando] = useState<Consultorio | null>(null)
+  const [videoUrl, setVideoUrl] = useState('')
   const [confirmReset, setConfirmReset] = useState(false)
   const [msg, setMsg] = useState('')
 
   const cargar = useCallback(async () => {
     try {
       const res = await fetch('/api/estado', { cache: 'no-store' })
-      const data = await res.json()
+      const data: EstadoAPI = await res.json()
       setEstado(data)
       setConsultorios(data.consultorios)
+      setVideoUrl(data.media?.videoUrl ?? '')
     } catch {}
   }, [])
 
@@ -42,6 +44,18 @@ export default function Admin() {
     cargar()
   }
 
+  const [editando, setEditando] = useState<string | null>(null)
+
+  async function guardarVideo() {
+    await fetch('/api/media', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoUrl: videoUrl.trim() }),
+    })
+    setMsg('✓ Video actualizado')
+    setTimeout(() => setMsg(''), 3000)
+  }
+
   async function resetear() {
     await fetch('/api/reset', { method: 'POST' })
     setConfirmReset(false)
@@ -60,16 +74,19 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-ryr-gray text-white shadow-lg">
+      <header className="bg-ryr-blue text-white shadow-lg">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-4">
           <Link href="/" className="text-white/70 hover:text-white transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
+          <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-white p-0.5 flex-shrink-0">
+            <Image src="/logo-ryr.png" alt="R&R" fill className="object-contain" />
+          </div>
           <div>
             <h1 className="text-xl font-bold">Administración</h1>
-            <p className="text-xs text-gray-300">R&amp;R Centro de Medicina y Optometría</p>
+            <p className="text-xs text-blue-200">R&amp;R Centro de Medicina y Optometría</p>
           </div>
         </div>
       </header>
@@ -77,17 +94,17 @@ export default function Admin() {
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
 
         {msg && (
-          <div className="bg-green-50 text-green-700 border border-green-200 p-4 rounded-xl font-medium animate-fade-in">
+          <div className="bg-ryr-teal-light text-ryr-teal-dark border border-ryr-teal/30 p-4 rounded-xl font-medium animate-fade-in">
             {msg}
           </div>
         )}
 
-        {/* Estadísticas del día */}
+        {/* Estadísticas */}
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: 'En espera ahora', value: enEspera, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200' },
-            { label: 'En atención ahora', value: enAtencion, color: 'text-ryr-blue', bg: 'bg-blue-50 border-blue-200' },
-            { label: 'Atendidos hoy', value: totalHoy, color: 'text-ryr-green', bg: 'bg-green-50 border-green-200' },
+            { label: 'En espera ahora',    value: enEspera,   color: 'text-amber-600',   bg: 'bg-amber-50 border-amber-200' },
+            { label: 'En atención ahora',  value: enAtencion, color: 'text-ryr-blue',     bg: 'bg-ryr-blue-light border-blue-200' },
+            { label: 'Atendidos hoy',      value: totalHoy,   color: 'text-ryr-teal',     bg: 'bg-ryr-teal-light border-ryr-teal/30' },
           ].map(s => (
             <div key={s.label} className={`card border ${s.bg} text-center`}>
               <p className={`text-4xl font-black ${s.color}`}>{s.value}</p>
@@ -105,63 +122,112 @@ export default function Admin() {
             </button>
           </div>
           <div className="space-y-3">
-            {consultorios.map(c => (
-              <div key={c.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3 flex-wrap">
-                <span className="w-8 h-8 rounded-full bg-ryr-blue text-white font-bold text-sm flex items-center justify-center flex-shrink-0">
-                  {c.id}
-                </span>
-                <input
-                  value={c.nombre}
-                  onChange={e => updateConsultorio(c.id, 'nombre', e.target.value)}
-                  className="flex-1 min-w-[180px] px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-ryr-blue"
-                  placeholder="Nombre del consultorio"
-                />
-                <input
-                  value={c.doctor}
-                  onChange={e => updateConsultorio(c.id, 'doctor', e.target.value)}
-                  className="flex-1 min-w-[140px] px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-ryr-blue"
-                  placeholder="Nombre del médico"
-                />
-                <select
-                  value={c.sala}
-                  onChange={e => updateConsultorio(c.id, 'sala', Number(e.target.value))}
-                  className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-ryr-blue bg-white"
-                >
-                  <option value={1}>Sala 1 - Medicina</option>
-                  <option value={2}>Sala 2 - Optometría</option>
-                </select>
-                <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+            {consultorios.map(c => {
+              const esPiso1 = c.piso === 1
+              return (
+                <div key={c.id} className={`flex items-center gap-3 rounded-xl px-4 py-3 flex-wrap border-l-4 ${esPiso1 ? 'bg-ryr-orange/5 border-ryr-orange' : 'bg-ryr-teal/5 border-ryr-teal'}`}>
+                  <span className={`w-8 h-8 rounded-full text-white font-bold text-sm flex items-center justify-center flex-shrink-0 ${esPiso1 ? 'bg-ryr-orange' : 'bg-ryr-teal'}`}>
+                    {c.id}
+                  </span>
                   <input
-                    type="checkbox"
-                    checked={c.activo}
-                    onChange={e => updateConsultorio(c.id, 'activo', e.target.checked)}
-                    className="w-4 h-4 accent-ryr-blue"
+                    value={c.nombre}
+                    onChange={e => updateConsultorio(c.id, 'nombre', e.target.value)}
+                    className="flex-1 min-w-[160px] px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-ryr-blue"
+                    placeholder="Nombre del servicio"
                   />
-                  Activo
-                </label>
-              </div>
-            ))}
+                  <input
+                    value={c.doctor}
+                    onChange={e => updateConsultorio(c.id, 'doctor', e.target.value)}
+                    className="flex-1 min-w-[140px] px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-ryr-blue"
+                    placeholder="Nombre del profesional"
+                  />
+                  <select
+                    value={c.piso}
+                    onChange={e => {
+                      const p = Number(e.target.value) as 1 | 2
+                      updateConsultorio(c.id, 'piso', p)
+                      updateConsultorio(c.id, 'sala', p)
+                    }}
+                    className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-ryr-blue bg-white"
+                  >
+                    <option value={1}>Piso 1</option>
+                    <option value={2}>Piso 2</option>
+                  </select>
+                  <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={c.activo}
+                      onChange={e => updateConsultorio(c.id, 'activo', e.target.checked)}
+                      className="w-4 h-4 accent-ryr-blue"
+                    />
+                    Activo
+                  </label>
+                </div>
+              )
+            })}
           </div>
         </div>
 
-        {/* Historial del día */}
+        {/* Configuración de Video */}
+        <div className="card">
+          <h2 className="text-lg font-bold text-ryr-blue mb-2 flex items-center gap-2">
+            <svg className="w-5 h-5 text-ryr-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Video en Sala de Espera
+          </h2>
+          <p className="text-gray-500 text-sm mb-4">
+            Pega una URL de YouTube para que se reproduzca en las pantallas de sala de espera.
+            Si se deja vacío, se muestra la imagen de los servicios de la IPS.
+          </p>
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={videoUrl}
+              onChange={e => setVideoUrl(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=..."
+              className="flex-1 px-4 py-2.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-ryr-teal transition-colors text-sm"
+            />
+            <button onClick={guardarVideo} className="btn-teal text-sm py-2 px-5 whitespace-nowrap">
+              Guardar
+            </button>
+            {videoUrl && (
+              <button
+                onClick={() => { setVideoUrl(''); }}
+                className="text-sm py-2 px-4 border-2 border-gray-200 rounded-xl text-gray-500 hover:border-red-300 hover:text-red-500 transition-colors"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+          {videoUrl && (
+            <p className="text-xs text-ryr-teal mt-2">✓ Video configurado · Se mostrará en ambas salas de espera</p>
+          )}
+        </div>
+
+        {/* Historial */}
         {estado?.historial && estado.historial.length > 0 && (
           <div className="card">
             <h2 className="text-lg font-bold text-ryr-blue mb-5">Historial de hoy</h2>
             <div className="space-y-2 max-h-64 overflow-y-auto">
-              {estado.historial.map((h, i) => (
-                <div key={i} className="flex items-center gap-3 text-sm py-2 border-b border-gray-50 last:border-0">
-                  <span className="font-black text-ryr-blue w-12">{h.turno}</span>
-                  <span className="flex-1 text-gray-700 font-medium">{h.nombre}</span>
-                  <span className="text-gray-400 text-xs">{h.consultorioNombre}</span>
-                  <span className="text-gray-300 text-xs">{horaLocal(h.timestamp)}</span>
-                </div>
-              ))}
+              {estado.historial.map((h, i) => {
+                const esPiso1 = (h.piso ?? 1) === 1
+                return (
+                  <div key={i} className="flex items-center gap-3 text-sm py-2 border-b border-gray-50 last:border-0">
+                    <span className={`font-black w-12 ${esPiso1 ? 'text-ryr-orange' : 'text-ryr-teal'}`}>{h.turno}</span>
+                    <span className="flex-1 text-gray-700 font-medium">{h.nombre}</span>
+                    <span className="text-gray-400 text-xs">{h.consultorioNombre}</span>
+                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${esPiso1 ? 'bg-ryr-orange/10 text-ryr-orange' : 'bg-ryr-teal/10 text-ryr-teal'}`}>P{h.piso ?? 1}</span>
+                    <span className="text-gray-300 text-xs">{horaLocal(h.timestamp)}</span>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
 
-        {/* Pacientes actuales */}
+        {/* Pacientes activos */}
         {estado?.pacientes && estado.pacientes.length > 0 && (
           <div className="card">
             <h2 className="text-lg font-bold text-ryr-blue mb-5">Pacientes activos</h2>
@@ -170,11 +236,10 @@ export default function Admin() {
                 <div key={p.id} className="flex items-center gap-3 text-sm py-2 border-b border-gray-50 last:border-0">
                   <span className="font-black text-ryr-blue w-12">{p.turno}</span>
                   <span className="flex-1 text-gray-700 font-medium">{p.nombre}</span>
-                  <span className="text-xs text-gray-400">Sala {p.sala}</span>
+                  <span className="text-xs text-gray-400">Piso {p.sala}</span>
                   <span className={`${
                     p.estado === 'esperando' ? 'badge-espera' :
-                    p.estado === 'llamado' || p.estado === 'en_atencion' ? 'badge-llamado' :
-                    'badge-atendido'
+                    p.estado === 'llamado' || p.estado === 'en_atencion' ? 'badge-llamado' : 'badge-atendido'
                   }`}>
                     {p.estado === 'esperando' ? 'Esperando' :
                      p.estado === 'llamado' ? 'Llamado' :
@@ -186,7 +251,7 @@ export default function Admin() {
           </div>
         )}
 
-        {/* Reset del día */}
+        {/* Reset */}
         <div className="card border border-red-100">
           <h2 className="text-lg font-bold text-red-600 mb-2">Reiniciar sistema</h2>
           <p className="text-gray-500 text-sm mb-4">

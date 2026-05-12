@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, use } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import type { Paciente, Consultorio, EstadoAPI } from '@/lib/types'
 
 function horaLocal(iso: string) {
@@ -100,9 +101,15 @@ export default function ConsultorioPage({ params }: { params: Promise<{ id: stri
   const pacienteActual = estado?.pacientes.find(
     p => p.consultoioId === id && (p.estado === 'llamado' || p.estado === 'en_atencion')
   )
-  const enEspera = estado?.pacientes.filter(
-    p => p.sala === (consultorio?.sala ?? 1) && p.estado === 'esperando'
-  ).sort((a, b) => new Date(a.horaIngreso).getTime() - new Date(b.horaIngreso).getTime()) ?? []
+  const enEspera = estado?.pacientes
+    .filter(p => p.sala === (consultorio?.sala ?? 1) && p.estado === 'esperando')
+    .sort((a, b) => new Date(a.horaIngreso).getTime() - new Date(b.horaIngreso).getTime()) ?? []
+
+  const esPisoUno = (consultorio?.piso ?? 1) === 1
+  const pisoColor = esPisoUno ? 'text-ryr-orange' : 'text-ryr-teal'
+  const pisoBg = esPisoUno ? 'bg-ryr-orange' : 'bg-ryr-teal'
+  const pisoBgDark = esPisoUno ? 'bg-ryr-orange-dark' : 'bg-ryr-teal-dark'
+  const pisoBorder = esPisoUno ? 'border-ryr-orange' : 'border-ryr-teal'
 
   if (!estado) {
     return (
@@ -126,16 +133,24 @@ export default function ConsultorioPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-ryr-blue text-white shadow-lg">
+      <header className={`${pisoBg} text-white shadow-lg`}>
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
           <Link href="/" className="text-white/70 hover:text-white transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
+          <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-white p-0.5 flex-shrink-0">
+            <Image src="/logo-ryr.png" alt="R&R" fill className="object-contain" />
+          </div>
           <div>
-            <h1 className="text-xl font-bold">{consultorio.nombre}</h1>
-            <p className="text-xs text-blue-200">{consultorio.doctor}</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold">{consultorio.nombre}</h1>
+              <span className="bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                Piso {consultorio.piso}
+              </span>
+            </div>
+            <p className="text-xs text-white/70">{consultorio.doctor}</p>
           </div>
           <div className="ml-auto">
             <span className="bg-white/20 rounded-lg px-3 py-1 text-sm">
@@ -149,14 +164,16 @@ export default function ConsultorioPage({ params }: { params: Promise<{ id: stri
 
         {mensaje && (
           <div className={`p-4 rounded-xl text-sm font-medium animate-fade-in ${
-            mensaje.tipo === 'ok' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+            mensaje.tipo === 'ok'
+              ? 'bg-ryr-teal-light text-ryr-teal-dark border border-ryr-teal/30'
+              : 'bg-red-50 text-red-700 border border-red-200'
           }`}>
             {mensaje.texto}
           </div>
         )}
 
         {/* Paciente actual */}
-        <div className={`card border-l-4 ${pacienteActual ? 'border-ryr-cyan' : 'border-gray-200'}`}>
+        <div className={`card border-l-4 ${pacienteActual ? pisoBorder : 'border-gray-200'}`}>
           <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">
             Paciente en atención
           </h2>
@@ -164,21 +181,15 @@ export default function ConsultorioPage({ params }: { params: Promise<{ id: stri
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
                 <div className="flex items-center gap-3 mb-1">
-                  <span className="text-4xl font-black text-ryr-blue">{pacienteActual.turno}</span>
+                  <span className={`text-4xl font-black ${pisoColor}`}>{pacienteActual.turno}</span>
                   <span className="badge-llamado animate-pulse">En atención</span>
                 </div>
                 <p className="text-2xl font-bold text-gray-800">{pacienteActual.nombre}</p>
                 {pacienteActual.horaLlamado && (
-                  <p className="text-sm text-gray-400 mt-1">
-                    Llamado a las {horaLocal(pacienteActual.horaLlamado)}
-                  </p>
+                  <p className="text-sm text-gray-400 mt-1">Llamado a las {horaLocal(pacienteActual.horaLlamado)}</p>
                 )}
               </div>
-              <button
-                onClick={finalizarAtencion}
-                disabled={cargando}
-                className="btn-danger disabled:opacity-50"
-              >
+              <button onClick={finalizarAtencion} disabled={cargando} className="btn-danger disabled:opacity-50">
                 Finalizar atención
               </button>
             </div>
@@ -194,11 +205,11 @@ export default function ConsultorioPage({ params }: { params: Promise<{ id: stri
           )}
         </div>
 
-        {/* Botón llamar siguiente */}
+        {/* Botón llamar */}
         <button
           onClick={llamarSiguiente}
           disabled={cargando || enEspera.length === 0}
-          className="w-full py-5 bg-ryr-blue hover:bg-ryr-blue-dark disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-xl shadow-lg hover:shadow-xl transition-all duration-200 active:scale-98"
+          className={`w-full py-5 ${pisoBg} hover:${pisoBgDark} disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-xl shadow-lg hover:shadow-xl transition-all duration-200 active:scale-98`}
         >
           {cargando ? 'Llamando...' : enEspera.length === 0 ? 'Sin pacientes en espera' : `Llamar Siguiente Paciente`}
         </button>
@@ -207,21 +218,21 @@ export default function ConsultorioPage({ params }: { params: Promise<{ id: stri
         {enEspera.length > 0 && (
           <div className="card">
             <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">
-              Cola de espera – Sala {consultorio.sala}
+              Cola de espera – Piso {consultorio.piso}
             </h2>
             <div className="space-y-2">
               {enEspera.map((p, i) => (
-                <div key={p.id} className="flex items-center gap-3 bg-gray-50 hover:bg-blue-50 rounded-xl px-4 py-3 transition-colors group">
+                <div key={p.id} className="flex items-center gap-3 bg-gray-50 hover:bg-gray-100 rounded-xl px-4 py-3 transition-colors group">
                   <span className="text-xl font-black text-gray-300 w-6 text-center">{i + 1}</span>
                   <div className="flex-1 min-w-0">
-                    <span className="font-bold text-ryr-blue mr-2">{p.turno}</span>
+                    <span className={`font-bold mr-2 ${pisoColor}`}>{p.turno}</span>
                     <span className="font-semibold text-gray-700">{p.nombre}</span>
                     <span className="block text-xs text-gray-400 mt-0.5">{tiempoEspera(p.horaIngreso)}</span>
                   </div>
                   <button
                     onClick={() => llamarEspecifico(p.id)}
                     disabled={cargando}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity btn-primary text-sm py-1.5 px-3 disabled:opacity-50"
+                    className={`opacity-0 group-hover:opacity-100 transition-opacity text-sm py-1.5 px-3 rounded-xl font-semibold text-white disabled:opacity-50 ${pisoBg}`}
                   >
                     Llamar
                   </button>

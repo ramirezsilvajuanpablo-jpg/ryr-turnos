@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server'
-import { getPacientes, getConsultorios, getUltimoLlamado, getHistorial } from '@/lib/store'
+import { getPacientes, getConsultorios, getUltimoLlamado, getHistorial, getMediaConfig } from '@/lib/store'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const [pacientes, consultorios, ultimoLlamado, historial] = await Promise.all([
+  const [pacientes, consultorios, ultimoLlamado, historial, media] = await Promise.all([
     getPacientes(),
     getConsultorios(),
     getUltimoLlamado(),
     getHistorial(),
+    getMediaConfig(),
   ])
 
   return NextResponse.json({
@@ -16,5 +17,6 @@ export async function GET() {
     consultorios,
     ultimoLlamado,
     historial,
+    media,
   })
 }

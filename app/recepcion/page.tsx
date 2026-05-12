@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import type { Paciente, EstadoAPI } from '@/lib/types'
 
 function horaLocal(iso: string) {
@@ -18,8 +19,7 @@ export default function Recepcion() {
   const cargarEstado = useCallback(async () => {
     try {
       const res = await fetch('/api/estado', { cache: 'no-store' })
-      const data = await res.json()
-      setEstado(data)
+      setEstado(await res.json())
     } catch {}
   }, [])
 
@@ -59,8 +59,8 @@ export default function Recepcion() {
     cargarEstado()
   }
 
-  const esperandoSala1 = estado?.pacientes.filter(p => p.sala === 1 && p.estado === 'esperando') ?? []
-  const esperandoSala2 = estado?.pacientes.filter(p => p.sala === 2 && p.estado === 'esperando') ?? []
+  const esperandoPiso1 = estado?.pacientes.filter(p => p.sala === 1 && p.estado === 'esperando') ?? []
+  const esperandoPiso2 = estado?.pacientes.filter(p => p.sala === 2 && p.estado === 'esperando') ?? []
   const llamados = estado?.pacientes.filter(p => p.estado === 'llamado' || p.estado === 'en_atencion') ?? []
 
   return (
@@ -73,16 +73,19 @@ export default function Recepcion() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
+          <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-white p-0.5 flex-shrink-0">
+            <Image src="/logo-ryr.png" alt="R&R" fill className="object-contain" />
+          </div>
           <div>
             <h1 className="text-xl font-bold">Recepción</h1>
             <p className="text-xs text-blue-200">R&amp;R Centro de Medicina y Optometría</p>
           </div>
           <div className="ml-auto flex gap-3 text-sm">
-            <span className="bg-white/20 rounded-lg px-3 py-1">
-              Sala 1: <strong>{esperandoSala1.length}</strong>
+            <span className="bg-ryr-orange/30 border border-ryr-orange/50 rounded-lg px-3 py-1">
+              Piso 1: <strong>{esperandoPiso1.length}</strong>
             </span>
-            <span className="bg-white/20 rounded-lg px-3 py-1">
-              Sala 2: <strong>{esperandoSala2.length}</strong>
+            <span className="bg-ryr-teal/30 border border-ryr-teal/50 rounded-lg px-3 py-1">
+              Piso 2: <strong>{esperandoPiso2.length}</strong>
             </span>
           </div>
         </div>
@@ -90,7 +93,7 @@ export default function Recepcion() {
 
       <div className="max-w-5xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* Formulario registro */}
+        {/* Formulario */}
         <div className="lg:col-span-1">
           <div className="card">
             <h2 className="text-lg font-bold text-ryr-blue mb-5 flex items-center gap-2">
@@ -102,7 +105,9 @@ export default function Recepcion() {
 
             {mensaje && (
               <div className={`mb-4 p-3 rounded-xl text-sm font-medium animate-fade-in ${
-                mensaje.tipo === 'ok' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+                mensaje.tipo === 'ok'
+                  ? 'bg-ryr-teal-light text-ryr-teal-dark border border-ryr-teal/30'
+                  : 'bg-red-50 text-red-700 border border-red-200'
               }`}>
                 {mensaje.texto}
               </div>
@@ -126,27 +131,37 @@ export default function Recepcion() {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-600 mb-1.5">
-                  Sala de espera
+                  ¿A qué piso va?
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { val: 1 as const, label: 'Sala 1', sub: 'Medicina' },
-                    { val: 2 as const, label: 'Sala 2', sub: 'Optometría' },
-                  ].map(s => (
-                    <button
-                      key={s.val}
-                      type="button"
-                      onClick={() => setSala(s.val)}
-                      className={`p-3 rounded-xl border-2 text-left transition-all ${
-                        sala === s.val
-                          ? 'border-ryr-blue bg-ryr-blue text-white'
-                          : 'border-gray-200 hover:border-ryr-blue/50 text-gray-700'
-                      }`}
-                    >
-                      <div className="font-bold text-sm">{s.label}</div>
-                      <div className={`text-xs ${sala === s.val ? 'text-blue-200' : 'text-gray-400'}`}>{s.sub}</div>
-                    </button>
-                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setSala(1)}
+                    className={`p-3 rounded-xl border-2 text-left transition-all ${
+                      sala === 1
+                        ? 'border-ryr-orange bg-ryr-orange text-white'
+                        : 'border-gray-200 hover:border-ryr-orange/50 text-gray-700'
+                    }`}
+                  >
+                    <div className="font-bold text-sm">Piso 1</div>
+                    <div className={`text-xs ${sala === 1 ? 'text-orange-100' : 'text-gray-400'}`}>
+                      Psic · Med. Ocup · Lab
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSala(2)}
+                    className={`p-3 rounded-xl border-2 text-left transition-all ${
+                      sala === 2
+                        ? 'border-ryr-teal bg-ryr-teal text-white'
+                        : 'border-gray-200 hover:border-ryr-teal/50 text-gray-700'
+                    }`}
+                  >
+                    <div className="font-bold text-sm">Piso 2</div>
+                    <div className={`text-xs ${sala === 2 ? 'text-teal-100' : 'text-gray-400'}`}>
+                      Optom · Fono · Enf
+                    </div>
+                  </button>
                 </div>
               </div>
 
@@ -162,14 +177,14 @@ export default function Recepcion() {
 
           {/* Llamados activos */}
           {llamados.length > 0 && (
-            <div className="card mt-4 border-l-4 border-ryr-cyan">
+            <div className="card mt-4 border-l-4 border-ryr-teal">
               <h3 className="text-sm font-bold text-ryr-blue mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-ryr-cyan animate-pulse inline-block"></span>
+                <span className="w-2 h-2 rounded-full bg-ryr-teal animate-pulse inline-block" />
                 En atención ahora
               </h3>
               <div className="space-y-2">
                 {llamados.map(p => (
-                  <div key={p.id} className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2">
+                  <div key={p.id} className="flex items-center justify-between bg-ryr-teal-light rounded-lg px-3 py-2">
                     <div>
                       <span className="font-bold text-ryr-blue text-sm">{p.turno}</span>
                       <span className="text-gray-600 text-sm ml-2">{p.nombre}</span>
@@ -182,37 +197,31 @@ export default function Recepcion() {
           )}
         </div>
 
-        {/* Cola de espera */}
+        {/* Colas de espera */}
         <div className="lg:col-span-2 space-y-5">
-          {/* Sala 1 */}
+          {/* Piso 1 */}
           <div className="card">
-            <h3 className="text-base font-bold text-ryr-blue mb-4 flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-ryr-blue inline-block"></span>
-              Sala 1 – Medicina General
-              <span className="ml-auto bg-ryr-blue text-white text-xs font-bold px-2.5 py-1 rounded-full">
-                {esperandoSala1.length} esperando
+            <h3 className="text-base font-bold text-ryr-orange mb-4 flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-ryr-orange inline-block" />
+              Piso 1 – Psicología · Medicina Ocupacional · Lab. Clínico
+              <span className="ml-auto bg-ryr-orange text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                {esperandoPiso1.length} esperando
               </span>
             </h3>
-            {esperandoSala1.length === 0 ? (
+            {esperandoPiso1.length === 0 ? (
               <p className="text-gray-400 text-sm text-center py-4">Sin pacientes en espera</p>
             ) : (
               <div className="space-y-2">
-                {esperandoSala1.map((p, i) => (
+                {esperandoPiso1.map((p, i) => (
                   <div key={p.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3 animate-fade-in">
-                    <span className="text-2xl font-black text-ryr-blue/30 w-8 text-center">{i + 1}</span>
+                    <span className="text-2xl font-black text-ryr-orange/30 w-8 text-center">{i + 1}</span>
                     <div className="flex-1">
-                      <span className="font-bold text-ryr-blue mr-2">{p.turno}</span>
+                      <span className="font-bold text-ryr-orange mr-2">{p.turno}</span>
                       <span className="font-semibold text-gray-700">{p.nombre}</span>
                     </div>
                     <span className="text-xs text-gray-400">{horaLocal(p.horaIngreso)}</span>
-                    <button
-                      onClick={() => eliminar(p.id)}
-                      className="text-red-400 hover:text-red-600 transition-colors p-1 rounded-lg hover:bg-red-50"
-                      title="Eliminar de la cola"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                    <button onClick={() => eliminar(p.id)} className="text-red-400 hover:text-red-600 transition-colors p-1 rounded-lg hover:bg-red-50" title="Eliminar">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                   </div>
                 ))}
@@ -220,35 +229,29 @@ export default function Recepcion() {
             )}
           </div>
 
-          {/* Sala 2 */}
+          {/* Piso 2 */}
           <div className="card">
-            <h3 className="text-base font-bold text-ryr-green mb-4 flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-ryr-green inline-block"></span>
-              Sala 2 – Optometría
-              <span className="ml-auto bg-ryr-green text-white text-xs font-bold px-2.5 py-1 rounded-full">
-                {esperandoSala2.length} esperando
+            <h3 className="text-base font-bold text-ryr-teal mb-4 flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-ryr-teal inline-block" />
+              Piso 2 – Optometría · Fonoaudiología · Enfermería
+              <span className="ml-auto bg-ryr-teal text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                {esperandoPiso2.length} esperando
               </span>
             </h3>
-            {esperandoSala2.length === 0 ? (
+            {esperandoPiso2.length === 0 ? (
               <p className="text-gray-400 text-sm text-center py-4">Sin pacientes en espera</p>
             ) : (
               <div className="space-y-2">
-                {esperandoSala2.map((p, i) => (
+                {esperandoPiso2.map((p, i) => (
                   <div key={p.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3 animate-fade-in">
-                    <span className="text-2xl font-black text-ryr-green/30 w-8 text-center">{i + 1}</span>
+                    <span className="text-2xl font-black text-ryr-teal/30 w-8 text-center">{i + 1}</span>
                     <div className="flex-1">
-                      <span className="font-bold text-ryr-green mr-2">{p.turno}</span>
+                      <span className="font-bold text-ryr-teal mr-2">{p.turno}</span>
                       <span className="font-semibold text-gray-700">{p.nombre}</span>
                     </div>
                     <span className="text-xs text-gray-400">{horaLocal(p.horaIngreso)}</span>
-                    <button
-                      onClick={() => eliminar(p.id)}
-                      className="text-red-400 hover:text-red-600 transition-colors p-1 rounded-lg hover:bg-red-50"
-                      title="Eliminar de la cola"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                    <button onClick={() => eliminar(p.id)} className="text-red-400 hover:text-red-600 transition-colors p-1 rounded-lg hover:bg-red-50" title="Eliminar">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                   </div>
                 ))}
