@@ -17,7 +17,8 @@ function horaLocal(iso: string) {
   return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
 }
 
-function getYouTubeEmbedUrl(url: string): string | null {
+// withSound: false = mute=1 (safe autoplay), true = mute=0 (user unlocked audio)
+function getYouTubeEmbedUrl(url: string, withSound = false): string | null {
   if (!url) return null
   try {
     let videoId: string | null = null
@@ -29,8 +30,8 @@ function getYouTubeEmbedUrl(url: string): string | null {
       videoId = url.split('embed/')[1].split('?')[0]
     }
     if (!videoId) return null
-    // mute=1 required for autoplay; enablejsapi=1 allows postMessage control (unmute after user interaction)
-    return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&controls=0&playlist=${videoId}&modestbranding=1&rel=0&enablejsapi=1`
+    const mute = withSound ? '0' : '1'
+    return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${mute}&loop=1&controls=0&playlist=${videoId}&modestbranding=1&rel=0&enablejsapi=1`
   } catch {
     return null
   }
@@ -55,77 +56,65 @@ export default function SalaPage({ params }: { params: { id: string } }) {
 
   const ultimoTimestampRef = useRef<string | null>(null)
   const videoLoadedRef = useRef(false)
-  // Refs for media control — stable across renders
   const soundRef = useRef(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
-  // Keep soundRef in sync with state so callbacks always read current value
   useEffect(() => { soundRef.current = soundEnabled }, [soundEnabled])
 
+  // YouTube IFrame API control via postMessage (pauseVideo/playVideo work without audio permission)
   const ytCmd = useCallback((func: string) => {
     iframeRef.current?.contentWindow?.postMessage(
       JSON.stringify({ event: 'command', func, args: '' }), '*'
     )
   }, [])
 
+  // pausarMedia: own video pauses; YouTube pauses visually via postMessage
   const pausarMedia = useCallback(() => {
     videoRef.current?.pause()
-    ytCmd('mute')
+    ytCmd('pauseVideo')
   }, [ytCmd])
 
+  // reanudarMedia: own video resumes (respecting mute state); YouTube resumes visually
   const reanudarMedia = useCallback(() => {
     if (videoRef.current) {
       videoRef.current.muted = !soundRef.current
       videoRef.current.play().catch(() => {})
     }
-    if (soundRef.current) ytCmd('unMute')
+    ytCmd('playVideo')
   }, [ytCmd])
 
+  // activarAudio: for own videos flips muted attr; for YouTube changes the src (reloads with mute=0)
+  // This is necessary because browsers block cross-origin iframe audio via postMessage unMute
   const activarAudio = useCallback(() => {
     soundRef.current = true
-    setSoundEnabled(true)
-    if (videoRef.current) videoRef.current.muted = false
-    ytCmd('unMute')
-  }, [ytCmd])
+    setSoundEnabled(true)            // triggers embedUrl to recompute with mute=0 → iframe reloads
+    if (videoRef.current) {
+      videoRef.current.muted = false
+      videoRef.current.play().catch(() => {})
+    }
+  }, [])
+
+  // Use refs for media fns so anunciar closure is always fresh without re-creating cargarEstado
+  const pausarRef = useRef(pausarMedia)
+  const reanudarRef = useRef(reanudarMedia)
+  useEffect(() => { pausarRef.current = pausarMedia }, [pausarMedia])
+  useEffect(() => { reanudarRef.current = reanudarMedia }, [reanudarMedia])
 
   const anunciar = useCallback((texto: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
     window.speechSynthesis.cancel()
-    pausarMedia()
+    pausarRef.current()
 
-    const speak = () => {
-      const voices = window.speechSynthesis.getVoices()
-      // Prefer neural/natural Spanish voices: US Spanish, Mexican, Colombian, then any Spanish
-      const preferred = ['es-US', 'es-MX', 'es-CO', 'es-ES', 'es-419', 'es']
-      const voice = preferred.reduce<SpeechSynthesisVoice | null>((found, lang) => {
-        if (found) return found
-        return voices.find(v => v.lang === lang && !v.localService)
-          ?? voices.find(v => v.lang === lang)
-          ?? null
-      }, null) ?? voices.find(v => v.lang.startsWith('es')) ?? null
-
-      const u = new SpeechSynthesisUtterance(texto)
-      if (voice) u.voice = voice
-      u.lang = 'es-CO'
-      u.rate = 0.88
-      u.pitch = 1.0
-      u.volume = 1.0
-      u.onend = () => setTimeout(reanudarMedia, 700)
-      u.onerror = () => setTimeout(reanudarMedia, 700)
-      window.speechSynthesis.speak(u)
-    }
-
-    // Voices load asynchronously on first call in some browsers
-    if (window.speechSynthesis.getVoices().length === 0) {
-      window.speechSynthesis.onvoiceschanged = () => {
-        window.speechSynthesis.onvoiceschanged = null
-        speak()
-      }
-    } else {
-      speak()
-    }
-  }, [pausarMedia, reanudarMedia])
+    const u = new SpeechSynthesisUtterance(texto)
+    u.lang = 'es-CO'
+    u.rate = 0.82
+    u.pitch = 1.0
+    u.volume = 1.0
+    u.onend = () => setTimeout(() => reanudarRef.current(), 700)
+    u.onerror = () => setTimeout(() => reanudarRef.current(), 700)
+    window.speechSynthesis.speak(u)
+  }, [])
 
   const cargarEstado = useCallback(async () => {
     try {
@@ -185,7 +174,11 @@ export default function SalaPage({ params }: { params: { id: string } }) {
   const salaLabel = salaNum === 1 ? 'SALA DE ESPERA – PISO 1' : 'SALA DE ESPERA – PISO 2'
   const historialSala = (estado?.historial ?? []).slice(0, 6)
   const esperando = estado?.pacientes.filter(p => p.sala === salaNum && p.estado === 'esperando').length ?? 0
-  const embedUrl = videoActivo?.tipo === 'youtube' ? getYouTubeEmbedUrl(videoActivo.url) : null
+
+  // soundEnabled drives the mute param — changing it causes the iframe to reload with new src
+  const embedUrl = videoActivo?.tipo === 'youtube'
+    ? getYouTubeEmbedUrl(videoActivo.url, soundEnabled)
+    : null
 
   return (
     <div className="h-screen bg-[#081224] text-white flex flex-col select-none overflow-hidden">
@@ -211,7 +204,7 @@ export default function SalaPage({ params }: { params: { id: string } }) {
         </div>
 
         <div className="text-right flex items-center gap-3">
-          {/* Audio toggle — must be pressed once to unlock browser audio policy */}
+          {/* Sound button — click once to unlock YouTube audio (iframe reloads with mute=0) */}
           <button
             onClick={activarAudio}
             title={soundEnabled ? 'Audio activo' : 'Activar audio del video'}
