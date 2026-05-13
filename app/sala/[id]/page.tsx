@@ -17,17 +17,6 @@ function horaLocal(iso: string) {
   return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
 }
 
-function anunciar(texto: string) {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
-  window.speechSynthesis.cancel()
-  const u = new SpeechSynthesisUtterance(texto)
-  u.lang = 'es-CO'
-  u.rate = 0.82
-  u.pitch = 1.0
-  u.volume = 1.0
-  window.speechSynthesis.speak(u)
-}
-
 function getYouTubeEmbedUrl(url: string): string | null {
   if (!url) return null
   try {
@@ -40,7 +29,8 @@ function getYouTubeEmbedUrl(url: string): string | null {
       videoId = url.split('embed/')[1].split('?')[0]
     }
     if (!videoId) return null
-    return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&controls=0&playlist=${videoId}&modestbranding=1&rel=0`
+    // mute=1 required for autoplay; enablejsapi=1 allows postMessage control (unmute after user interaction)
+    return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&controls=0&playlist=${videoId}&modestbranding=1&rel=0&enablejsapi=1`
   } catch {
     return null
   }
@@ -54,14 +44,88 @@ const SERVICIOS_PISO: Record<1 | 2, string[]> = {
 export default function SalaPage({ params }: { params: { id: string } }) {
   const { id } = params
   const salaNum = Number(id) as 1 | 2
+
   const [estado, setEstado] = useState<EstadoAPI | null>(null)
   const [ultimo, setUltimo] = useState<UltimoLlamado | null>(null)
   const [parpadeo, setParpadeo] = useState(false)
-  const ultimoTimestampRef = useRef<string | null>(null)
   const [hora, setHora] = useState('')
   const [fecha, setFecha] = useState('')
   const [videoActivo, setVideoActivo] = useState<VideoItem | null>(null)
+  const [soundEnabled, setSoundEnabled] = useState(false)
+
+  const ultimoTimestampRef = useRef<string | null>(null)
   const videoLoadedRef = useRef(false)
+  // Refs for media control — stable across renders
+  const soundRef = useRef(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+
+  // Keep soundRef in sync with state so callbacks always read current value
+  useEffect(() => { soundRef.current = soundEnabled }, [soundEnabled])
+
+  const ytCmd = useCallback((func: string) => {
+    iframeRef.current?.contentWindow?.postMessage(
+      JSON.stringify({ event: 'command', func, args: '' }), '*'
+    )
+  }, [])
+
+  const pausarMedia = useCallback(() => {
+    videoRef.current?.pause()
+    ytCmd('mute')
+  }, [ytCmd])
+
+  const reanudarMedia = useCallback(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = !soundRef.current
+      videoRef.current.play().catch(() => {})
+    }
+    if (soundRef.current) ytCmd('unMute')
+  }, [ytCmd])
+
+  const activarAudio = useCallback(() => {
+    soundRef.current = true
+    setSoundEnabled(true)
+    if (videoRef.current) videoRef.current.muted = false
+    ytCmd('unMute')
+  }, [ytCmd])
+
+  const anunciar = useCallback((texto: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+    window.speechSynthesis.cancel()
+    pausarMedia()
+
+    const speak = () => {
+      const voices = window.speechSynthesis.getVoices()
+      // Prefer neural/natural Spanish voices: US Spanish, Mexican, Colombian, then any Spanish
+      const preferred = ['es-US', 'es-MX', 'es-CO', 'es-ES', 'es-419', 'es']
+      const voice = preferred.reduce<SpeechSynthesisVoice | null>((found, lang) => {
+        if (found) return found
+        return voices.find(v => v.lang === lang && !v.localService)
+          ?? voices.find(v => v.lang === lang)
+          ?? null
+      }, null) ?? voices.find(v => v.lang.startsWith('es')) ?? null
+
+      const u = new SpeechSynthesisUtterance(texto)
+      if (voice) u.voice = voice
+      u.lang = 'es-CO'
+      u.rate = 0.88
+      u.pitch = 1.0
+      u.volume = 1.0
+      u.onend = () => setTimeout(reanudarMedia, 700)
+      u.onerror = () => setTimeout(reanudarMedia, 700)
+      window.speechSynthesis.speak(u)
+    }
+
+    // Voices load asynchronously on first call in some browsers
+    if (window.speechSynthesis.getVoices().length === 0) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.onvoiceschanged = null
+        speak()
+      }
+    } else {
+      speak()
+    }
+  }, [pausarMedia, reanudarMedia])
 
   const cargarEstado = useCallback(async () => {
     try {
@@ -69,7 +133,6 @@ export default function SalaPage({ params }: { params: { id: string } }) {
       const data: EstadoAPI = await res.json()
       setEstado(data)
 
-      // Ambas pantallas muestran la misma información — sin filtro por sala
       const llamadoDeSala = data.ultimoLlamado
 
       if (llamadoDeSala && llamadoDeSala.timestamp !== ultimoTimestampRef.current) {
@@ -85,7 +148,7 @@ export default function SalaPage({ params }: { params: { id: string } }) {
         )
       }
     } catch {}
-  }, [salaNum])
+  }, [anunciar])
 
   useEffect(() => {
     cargarEstado()
@@ -104,13 +167,7 @@ export default function SalaPage({ params }: { params: { id: string } }) {
     return () => clearInterval(t)
   }, [])
 
-  // Historial universal — ambas pantallas muestran todos los llamados
-  const historialSala = (estado?.historial ?? []).slice(0, 6)
-  const esperando = estado?.pacientes.filter(p => p.sala === salaNum && p.estado === 'esperando').length ?? 0
-  const pisoSala = salaNum === 1 ? 1 : 2
-  const salaLabel = salaNum === 1 ? 'SALA DE ESPERA – PISO 1' : 'SALA DE ESPERA – PISO 2'
-
-  // Selección aleatoria de video al cargar la playlist
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const playlist = estado?.media?.playlist ?? []
     if (playlist.length === 0) {
@@ -120,13 +177,15 @@ export default function SalaPage({ params }: { params: { id: string } }) {
       videoLoadedRef.current = true
       setVideoActivo(playlist[Math.floor(Math.random() * playlist.length)])
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [estado?.media?.playlist?.length])
 
-  const embedUrl = videoActivo?.tipo === 'youtube' ? getYouTubeEmbedUrl(videoActivo.url) : null
-
+  const pisoSala = salaNum === 1 ? 1 : 2
   const piso = ultimo?.piso ?? pisoSala
   const esPisoUno = piso === 1
+  const salaLabel = salaNum === 1 ? 'SALA DE ESPERA – PISO 1' : 'SALA DE ESPERA – PISO 2'
+  const historialSala = (estado?.historial ?? []).slice(0, 6)
+  const esperando = estado?.pacientes.filter(p => p.sala === salaNum && p.estado === 'esperando').length ?? 0
+  const embedUrl = videoActivo?.tipo === 'youtube' ? getYouTubeEmbedUrl(videoActivo.url) : null
 
   return (
     <div className="h-screen bg-[#081224] text-white flex flex-col select-none overflow-hidden">
@@ -152,15 +211,42 @@ export default function SalaPage({ params }: { params: { id: string } }) {
         </div>
 
         <div className="text-right flex items-center gap-3">
+          {/* Audio toggle — must be pressed once to unlock browser audio policy */}
+          <button
+            onClick={activarAudio}
+            title={soundEnabled ? 'Audio activo' : 'Activar audio del video'}
+            className={`p-1.5 rounded-lg transition-colors ${
+              soundEnabled
+                ? 'text-ryr-teal hover:bg-white/10'
+                : 'text-white/40 hover:text-white hover:bg-white/10 animate-pulse'
+            }`}
+          >
+            {soundEnabled ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M15.536 8.464a5 5 0 010 7.072M12 6l-4 4H4v4h4l4 4V6z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+              </svg>
+            )}
+          </button>
+
           <button
             onClick={toggleFullscreen}
             title="Pantalla completa"
             className="text-white/50 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/10"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
             </svg>
           </button>
+
           <div>
             <p className="font-mono text-white text-3xl font-black tracking-widest">{hora}</p>
             <p className="text-blue-300 text-xs capitalize mt-0.5">{fecha}</p>
@@ -175,6 +261,7 @@ export default function SalaPage({ params }: { params: { id: string } }) {
         <div className="flex-1 bg-[#060D1A] relative overflow-hidden border-r border-white/5">
           {videoActivo?.tipo === 'propio' ? (
             <video
+              ref={videoRef}
               src={videoActivo.url}
               className="w-full h-full object-cover"
               autoPlay
@@ -184,6 +271,7 @@ export default function SalaPage({ params }: { params: { id: string } }) {
             />
           ) : embedUrl ? (
             <iframe
+              ref={iframeRef}
               src={embedUrl}
               className="w-full h-full"
               allow="autoplay; fullscreen"
@@ -191,7 +279,6 @@ export default function SalaPage({ params }: { params: { id: string } }) {
               style={{ border: 'none' }}
             />
           ) : (
-            /* Branded info slide when no video configured */
             <div className="w-full h-full flex flex-col items-center justify-center gap-8 px-12">
               <div className="relative w-48 h-48 drop-shadow-2xl">
                 <Image src="/logo-ryr.png" alt="R&R" fill className="object-contain" />
@@ -204,7 +291,7 @@ export default function SalaPage({ params }: { params: { id: string } }) {
               <div className="w-full max-w-md">
                 <p className="text-gray-500 text-xs uppercase tracking-widest text-center mb-4">Nuestros Servicios</p>
                 <div className="grid grid-cols-2 gap-3">
-                  {([1, 2] as const).map(p => (
+                  {([1, 2] as const).map(p =>
                     SERVICIOS_PISO[p].map(s => (
                       <div
                         key={s}
@@ -219,7 +306,7 @@ export default function SalaPage({ params }: { params: { id: string } }) {
                         <span className="ml-auto text-xs font-normal opacity-60">P{p}</span>
                       </div>
                     ))
-                  ))}
+                  )}
                 </div>
               </div>
             </div>
@@ -230,9 +317,7 @@ export default function SalaPage({ params }: { params: { id: string } }) {
         <div
           className={`w-[420px] flex-shrink-0 flex flex-col items-center justify-center px-8 py-8 transition-colors duration-700 ${
             parpadeo
-              ? esPisoUno
-                ? 'bg-ryr-orange/15'
-                : 'bg-ryr-teal/15'
+              ? esPisoUno ? 'bg-ryr-orange/15' : 'bg-ryr-teal/15'
               : 'bg-[#0C1A2E]'
           }`}
         >
@@ -240,13 +325,10 @@ export default function SalaPage({ params }: { params: { id: string } }) {
             <div className="w-full flex flex-col items-center gap-5">
               <p className="text-white/30 text-xs uppercase tracking-[0.5em]">Turno en llamado</p>
 
-              {/* Turn number */}
               <div
                 className={`w-full text-center rounded-2xl py-7 transition-all duration-500 shadow-2xl ${
                   parpadeo
-                    ? esPisoUno
-                      ? 'bg-ryr-orange shadow-ryr-orange/30'
-                      : 'bg-ryr-teal shadow-ryr-teal/30'
+                    ? esPisoUno ? 'bg-ryr-orange shadow-ryr-orange/30' : 'bg-ryr-teal shadow-ryr-teal/30'
                     : 'bg-white/10'
                 }`}
               >
@@ -255,18 +337,14 @@ export default function SalaPage({ params }: { params: { id: string } }) {
                 </p>
               </div>
 
-              {/* Patient name */}
               <p className="text-3xl font-black text-white text-center leading-tight px-2">
                 {ultimo.nombre}
               </p>
 
-              {/* FLOOR DIRECTION — hero element */}
               <div
                 className={`w-full border-2 rounded-2xl p-6 text-center transition-all duration-500 ${
                   parpadeo
-                    ? esPisoUno
-                      ? 'border-ryr-orange bg-ryr-orange/10'
-                      : 'border-ryr-teal bg-ryr-teal/10'
+                    ? esPisoUno ? 'border-ryr-orange bg-ryr-orange/10' : 'border-ryr-teal bg-ryr-teal/10'
                     : 'border-white/15 bg-white/5'
                 }`}
               >
@@ -290,14 +368,14 @@ export default function SalaPage({ params }: { params: { id: string } }) {
             <div className="text-center flex flex-col items-center gap-5">
               <div className="w-24 h-24 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
                 <svg className="w-12 h-12 text-white/15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <div>
                 <p className="text-white/30 text-2xl font-bold">Sin llamados</p>
                 <p className="text-white/15 text-sm mt-2">Los turnos aparecerán aquí automáticamente</p>
               </div>
-              {/* Mini service list for this floor */}
               <div className="mt-2 space-y-2 w-full">
                 {SERVICIOS_PISO[pisoSala].map(s => (
                   <div key={s} className={`flex items-center gap-3 px-4 py-2 rounded-xl text-sm ${
