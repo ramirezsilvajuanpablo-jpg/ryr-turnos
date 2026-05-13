@@ -12,10 +12,15 @@ function horaLocal(iso: string) {
 export default function Admin() {
   const [estado, setEstado] = useState<EstadoAPI | null>(null)
   const [consultorios, setConsultorios] = useState<Consultorio[]>([])
-  const [videoUrl, setVideoUrl] = useState('')
   const [confirmReset, setConfirmReset] = useState(false)
   const [msg, setMsg] = useState('')
   const [, setEditando] = useState<string | null>(null)
+  const [youtubeInput, setYoutubeInput] = useState('')
+  const [youtubeNombre, setYoutubeNombre] = useState('')
+  const [archivoVideo, setArchivoVideo] = useState<File | null>(null)
+  const [nombreVideo, setNombreVideo] = useState('')
+  const [subiendo, setSubiendo] = useState(false)
+  const [uploadMsg, setUploadMsg] = useState('')
 
   const cargar = useCallback(async () => {
     try {
@@ -23,7 +28,6 @@ export default function Admin() {
       const data: EstadoAPI = await res.json()
       setEstado(data)
       setConsultorios(data.consultorios)
-      setVideoUrl(data.media?.videoUrl ?? '')
     } catch {}
   }, [])
 
@@ -45,14 +49,69 @@ export default function Admin() {
     cargar()
   }
 
-  async function guardarVideo() {
+  async function agregarYoutube() {
+    if (!youtubeInput.trim()) return
+    const item = {
+      id: crypto.randomUUID(),
+      tipo: 'youtube' as const,
+      url: youtubeInput.trim(),
+      nombre: youtubeNombre.trim() || youtubeInput.trim(),
+    }
     await fetch('/api/media', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ videoUrl: videoUrl.trim() }),
+      body: JSON.stringify({ action: 'add', item }),
     })
-    setMsg('✓ Video actualizado')
+    setYoutubeInput('')
+    setYoutubeNombre('')
+    setMsg('✓ Video de YouTube agregado')
     setTimeout(() => setMsg(''), 3000)
+    cargar()
+  }
+
+  async function subirVideo() {
+    if (!archivoVideo) return
+    setSubiendo(true)
+    setUploadMsg('')
+    const formData = new FormData()
+    formData.append('file', archivoVideo)
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: formData })
+      const data = await res.json()
+      if (!res.ok) {
+        setUploadMsg(data.error || 'Error al subir')
+        setSubiendo(false)
+        return
+      }
+      const item = {
+        id: crypto.randomUUID(),
+        tipo: 'propio' as const,
+        url: data.url,
+        nombre: nombreVideo.trim() || archivoVideo.name,
+      }
+      await fetch('/api/media', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add', item }),
+      })
+      setArchivoVideo(null)
+      setNombreVideo('')
+      setMsg('✓ Video subido y agregado a la biblioteca')
+      setTimeout(() => setMsg(''), 3000)
+      cargar()
+    } catch {
+      setUploadMsg('Error de conexión al subir')
+    }
+    setSubiendo(false)
+  }
+
+  async function eliminarVideo(id: string) {
+    await fetch('/api/media', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'remove', id }),
+    })
+    cargar()
   }
 
   async function resetear() {
@@ -167,42 +226,118 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* Configuración de Video */}
+        {/* Biblioteca de Videos */}
         <div className="card">
-          <h2 className="text-lg font-bold text-ryr-blue mb-2 flex items-center gap-2">
+          <h2 className="text-lg font-bold text-ryr-blue mb-1 flex items-center gap-2">
             <svg className="w-5 h-5 text-ryr-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            Video en Sala de Espera
+            Biblioteca de Videos
           </h2>
           <p className="text-gray-500 text-sm mb-4">
-            Pega una URL de YouTube para que se reproduzca en las pantallas de sala de espera.
-            Si se deja vacío, se muestra la imagen de los servicios de la IPS.
+            Los videos se reproducen aleatoriamente en las pantallas de sala de espera. Puedes agregar URLs de YouTube o subir videos propios (MP4).
           </p>
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={videoUrl}
-              onChange={e => setVideoUrl(e.target.value)}
-              placeholder="https://www.youtube.com/watch?v=..."
-              className="flex-1 px-4 py-2.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-ryr-teal transition-colors text-sm"
-            />
-            <button onClick={guardarVideo} className="btn-teal text-sm py-2 px-5 whitespace-nowrap">
-              Guardar
-            </button>
-            {videoUrl && (
-              <button
-                onClick={() => { setVideoUrl(''); }}
-                className="text-sm py-2 px-4 border-2 border-gray-200 rounded-xl text-gray-500 hover:border-red-300 hover:text-red-500 transition-colors"
-              >
-                Limpiar
-              </button>
-            )}
-          </div>
-          {videoUrl && (
-            <p className="text-xs text-ryr-teal mt-2">✓ Video configurado · Se mostrará en ambas salas de espera</p>
+
+          {/* Lista de videos */}
+          {(estado?.media?.playlist?.length ?? 0) === 0 ? (
+            <p className="text-gray-400 text-sm text-center py-4 bg-gray-50 rounded-xl mb-4">Sin videos en la biblioteca</p>
+          ) : (
+            <div className="space-y-2 mb-5">
+              {estado?.media?.playlist?.map(v => (
+                <div key={v.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3">
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                    v.tipo === 'youtube' ? 'bg-red-100 text-red-600' : 'bg-ryr-teal/10 text-ryr-teal'
+                  }`}>
+                    {v.tipo === 'youtube' ? 'YouTube' : 'Propio'}
+                  </span>
+                  <span className="flex-1 text-sm text-gray-700 font-medium truncate">{v.nombre}</span>
+                  <span className="text-xs text-gray-400 truncate max-w-[160px] hidden sm:block">{v.url}</span>
+                  <button
+                    onClick={() => eliminarVideo(v.id)}
+                    className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0"
+                    title="Eliminar"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4 border-t border-gray-100">
+            {/* Agregar YouTube */}
+            <div>
+              <h3 className="text-sm font-bold text-gray-600 mb-3 flex items-center gap-2">
+                <span className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center text-red-600 text-xs font-black">▶</span>
+                Agregar YouTube
+              </h3>
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={youtubeInput}
+                  onChange={e => setYoutubeInput(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-red-400 transition-colors"
+                />
+                <input
+                  type="text"
+                  value={youtubeNombre}
+                  onChange={e => setYoutubeNombre(e.target.value)}
+                  placeholder="Nombre (opcional)"
+                  className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-red-400 transition-colors"
+                />
+                <button
+                  onClick={agregarYoutube}
+                  disabled={!youtubeInput.trim()}
+                  className="w-full py-2 px-4 bg-red-500 hover:bg-red-600 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"
+                >
+                  Agregar YouTube
+                </button>
+              </div>
+            </div>
+
+            {/* Subir video propio */}
+            <div>
+              <h3 className="text-sm font-bold text-gray-600 mb-3 flex items-center gap-2">
+                <span className="w-5 h-5 bg-ryr-teal/10 rounded-full flex items-center justify-center text-ryr-teal text-xs font-black">↑</span>
+                Subir Video Propio
+              </h3>
+              <div className="space-y-2">
+                <label className="w-full flex items-center gap-2 px-3 py-2 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-500 cursor-pointer hover:border-ryr-teal/50 transition-colors">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <span className="truncate">{archivoVideo ? archivoVideo.name : 'Seleccionar archivo MP4...'}</span>
+                  <input
+                    type="file"
+                    accept="video/*"
+                    className="sr-only"
+                    onChange={e => setArchivoVideo(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+                <input
+                  type="text"
+                  value={nombreVideo}
+                  onChange={e => setNombreVideo(e.target.value)}
+                  placeholder="Nombre del video (opcional)"
+                  className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-ryr-teal transition-colors"
+                />
+                <button
+                  onClick={subirVideo}
+                  disabled={!archivoVideo || subiendo}
+                  className="w-full py-2 px-4 bg-ryr-teal hover:bg-ryr-teal-dark disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"
+                >
+                  {subiendo ? 'Subiendo...' : 'Subir Video'}
+                </button>
+                {uploadMsg && (
+                  <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{uploadMsg}</p>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Historial */}

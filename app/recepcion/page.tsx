@@ -12,7 +12,8 @@ function horaLocal(iso: string) {
 export default function Recepcion() {
   const [nombre, setNombre] = useState('')
   const [sala, setSala] = useState<1 | 2>(1)
-  const [tipo, setTipo] = useState<'simple' | 'completa'>('simple')
+  const [tipo, setTipo] = useState<'simple' | 'completa' | 'personalizada'>('simple')
+  const [consultoriosSeleccionados, setConsultoriosSeleccionados] = useState<string[]>([])
   const [estado, setEstado] = useState<EstadoAPI | null>(null)
   const [cargando, setCargando] = useState(false)
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
@@ -30,20 +31,36 @@ export default function Recepcion() {
     return () => clearInterval(id)
   }, [cargarEstado])
 
+  function toggleConsultorio(id: string) {
+    setConsultoriosSeleccionados(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
+  }
+
+  const puedeRegistrar =
+    nombre.trim().length > 0 &&
+    (tipo !== 'personalizada' || consultoriosSeleccionados.length > 0)
+
   async function registrar(e: React.FormEvent) {
     e.preventDefault()
-    if (!nombre.trim()) return
+    if (!puedeRegistrar) return
     setCargando(true)
     try {
       const res = await fetch('/api/pacientes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre: nombre.trim(), sala, tipo }),
+        body: JSON.stringify({
+          nombre: nombre.trim(),
+          sala,
+          tipo,
+          consultoriosAsignados: tipo === 'personalizada' ? consultoriosSeleccionados : undefined,
+        }),
       })
       const data = await res.json()
       if (res.ok) {
         setMensaje({ tipo: 'ok', texto: `✓ Turno ${data.turno} asignado a ${data.nombre}` })
         setNombre('')
+        setConsultoriosSeleccionados([])
         cargarEstado()
       } else {
         setMensaje({ tipo: 'error', texto: data.error || 'Error al registrar' })
@@ -60,15 +77,16 @@ export default function Recepcion() {
     cargarEstado()
   }
 
-  const esperandoPiso1 = estado?.pacientes.filter(p => p.sala === 1 && p.estado === 'esperando') ?? []
-  const esperandoPiso2 = estado?.pacientes.filter(p => p.sala === 2 && p.estado === 'esperando') ?? []
+  const consultoiosActivos = estado?.consultorios.filter(c => c.activo) ?? []
+  const esperandoPiso1 = estado?.pacientes.filter(p => p.sala === 1 && p.estado === 'esperando' && p.tipo === 'simple') ?? []
+  const esperandoPiso2 = estado?.pacientes.filter(p => p.sala === 2 && p.estado === 'esperando' && p.tipo === 'simple') ?? []
   const llamados = estado?.pacientes.filter(p => p.estado === 'llamado' || p.estado === 'en_atencion') ?? []
-  // "Completa" pacientes en espera (aparecen en ambos pisos)
-  const esperandoCompleta = estado?.pacientes.filter(p => (p.tipo ?? 'simple') === 'completa' && p.estado === 'esperando') ?? []
+  const esperandoMulti = estado?.pacientes.filter(
+    p => (p.tipo === 'completa' || p.tipo === 'personalizada') && p.estado === 'esperando'
+  ) ?? []
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-ryr-blue text-white shadow-lg">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-4">
           <Link href="/" className="text-white/70 hover:text-white transition-colors">
@@ -90,9 +108,9 @@ export default function Recepcion() {
             <span className="bg-ryr-teal/30 border border-ryr-teal/50 rounded-lg px-3 py-1">
               Piso 2: <strong>{esperandoPiso2.length}</strong>
             </span>
-            {esperandoCompleta.length > 0 && (
+            {esperandoMulti.length > 0 && (
               <span className="bg-purple-500/30 border border-purple-400/50 rounded-lg px-3 py-1">
-                Completa: <strong>{esperandoCompleta.length}</strong>
+                Multi: <strong>{esperandoMulti.length}</strong>
               </span>
             )}
           </div>
@@ -142,35 +160,47 @@ export default function Recepcion() {
                 <label className="block text-sm font-semibold text-gray-600 mb-1.5">
                   Tipo de atención
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-1.5">
                   <button
                     type="button"
                     onClick={() => setTipo('simple')}
-                    className={`p-3 rounded-xl border-2 text-left transition-all ${
+                    className={`p-2.5 rounded-xl border-2 text-left transition-all ${
                       tipo === 'simple'
                         ? 'border-ryr-blue bg-ryr-blue text-white'
                         : 'border-gray-200 hover:border-ryr-blue/50 text-gray-700'
                     }`}
                   >
-                    <div className="font-bold text-sm">Ruta Simple</div>
+                    <div className="font-bold text-xs">Simple</div>
                     <div className={`text-xs ${tipo === 'simple' ? 'text-blue-200' : 'text-gray-400'}`}>1 consultorio</div>
                   </button>
                   <button
                     type="button"
+                    onClick={() => { setTipo('personalizada'); setConsultoriosSeleccionados([]) }}
+                    className={`p-2.5 rounded-xl border-2 text-left transition-all ${
+                      tipo === 'personalizada'
+                        ? 'border-indigo-600 bg-indigo-600 text-white'
+                        : 'border-gray-200 hover:border-indigo-400/50 text-gray-700'
+                    }`}
+                  >
+                    <div className="font-bold text-xs">Personalizada</div>
+                    <div className={`text-xs ${tipo === 'personalizada' ? 'text-indigo-200' : 'text-gray-400'}`}>Escoge</div>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setTipo('completa')}
-                    className={`p-3 rounded-xl border-2 text-left transition-all ${
+                    className={`p-2.5 rounded-xl border-2 text-left transition-all ${
                       tipo === 'completa'
                         ? 'border-purple-600 bg-purple-600 text-white'
                         : 'border-gray-200 hover:border-purple-400/50 text-gray-700'
                     }`}
                   >
-                    <div className="font-bold text-sm">Ruta Completa</div>
-                    <div className={`text-xs ${tipo === 'completa' ? 'text-purple-200' : 'text-gray-400'}`}>6 consultorios</div>
+                    <div className="font-bold text-xs">Completa</div>
+                    <div className={`text-xs ${tipo === 'completa' ? 'text-purple-200' : 'text-gray-400'}`}>6 consult.</div>
                   </button>
                 </div>
               </div>
 
-              {/* Piso (solo para ruta simple) */}
+              {/* Piso (solo ruta simple) */}
               {tipo === 'simple' && (
                 <div>
                   <label className="block text-sm font-semibold text-gray-600 mb-1.5">
@@ -209,15 +239,69 @@ export default function Recepcion() {
                 </div>
               )}
 
+              {/* Selección de consultorios (ruta personalizada) */}
+              {tipo === 'personalizada' && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-600 mb-1.5">
+                    Seleccionar consultorios
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {consultoiosActivos.map(c => {
+                      const checked = consultoriosSeleccionados.includes(c.id)
+                      const esPiso1 = c.piso === 1
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => toggleConsultorio(c.id)}
+                          className={`flex items-center gap-2 p-2.5 rounded-xl border-2 text-left transition-all ${
+                            checked
+                              ? esPiso1
+                                ? 'border-ryr-orange bg-ryr-orange/10'
+                                : 'border-ryr-teal bg-ryr-teal/10'
+                              : 'border-gray-200 hover:border-gray-300 bg-white'
+                          }`}
+                        >
+                          <span className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                            checked
+                              ? esPiso1 ? 'bg-ryr-orange border-ryr-orange' : 'bg-ryr-teal border-ryr-teal'
+                              : 'border-gray-300'
+                          }`}>
+                            {checked && (
+                              <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </span>
+                          <span className="text-xs font-semibold text-gray-700 leading-tight flex-1">{c.nombre}</span>
+                          <span className={`text-xs font-bold px-1 rounded flex-shrink-0 ${esPiso1 ? 'text-ryr-orange' : 'text-ryr-teal'}`}>
+                            P{c.piso}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p className={`text-xs mt-2 rounded-lg px-3 py-2 border ${
+                    consultoriosSeleccionados.length > 0
+                      ? 'text-indigo-600 bg-indigo-50 border-indigo-100'
+                      : 'text-gray-400 bg-gray-50 border-gray-100'
+                  }`}>
+                    {consultoriosSeleccionados.length > 0
+                      ? `${consultoriosSeleccionados.length} consultorio${consultoriosSeleccionados.length !== 1 ? 's' : ''} seleccionado${consultoriosSeleccionados.length !== 1 ? 's' : ''}`
+                      : 'Selecciona al menos un consultorio'}
+                  </p>
+                </div>
+              )}
+
               {tipo === 'completa' && (
                 <p className="text-xs text-purple-600 bg-purple-50 border border-purple-100 rounded-lg px-3 py-2">
-                  El paciente pasará por los 6 consultorios. Puede ser llamado desde cualquier consultorio y vuelve a la sala de espera hasta completar todos.
+                  El paciente pasará por los {consultoiosActivos.length} consultorios activos en cualquier orden.
                 </p>
               )}
 
               <button
                 type="submit"
-                disabled={cargando || !nombre.trim()}
+                disabled={cargando || !puedeRegistrar}
                 className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed text-center"
               >
                 {cargando ? 'Registrando...' : 'Asignar Turno'}
@@ -233,20 +317,29 @@ export default function Recepcion() {
                 En atención ahora
               </h3>
               <div className="space-y-2">
-                {llamados.map(p => (
-                  <div key={p.id} className="flex items-center justify-between bg-ryr-teal-light rounded-lg px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-ryr-blue text-sm">{p.turno}</span>
-                      <span className="text-gray-600 text-sm">{p.nombre}</span>
-                      {(p.tipo ?? 'simple') === 'completa' && (
-                        <span className="bg-purple-100 text-purple-700 text-xs font-semibold px-1.5 py-0.5 rounded-full">
-                          {(p.consultoriosVisitados?.length ?? 0) + 1}/6
-                        </span>
-                      )}
+                {llamados.map(p => {
+                  const total = p.tipo === 'personalizada'
+                    ? p.consultoriosAsignados?.length ?? 0
+                    : p.tipo === 'completa'
+                      ? (estado?.consultorios.filter(c => c.activo).length ?? 6)
+                      : 0
+                  return (
+                    <div key={p.id} className="flex items-center justify-between bg-ryr-teal-light rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-ryr-blue text-sm">{p.turno}</span>
+                        <span className="text-gray-600 text-sm">{p.nombre}</span>
+                        {p.tipo !== 'simple' && (
+                          <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
+                            p.tipo === 'personalizada' ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'
+                          }`}>
+                            {(p.consultoriosVisitados?.length ?? 0) + 1}/{total}
+                          </span>
+                        )}
+                      </div>
+                      <span className="badge-llamado">Llamado</span>
                     </div>
-                    <span className="badge-llamado">Llamado</span>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
@@ -254,34 +347,56 @@ export default function Recepcion() {
 
         {/* Colas de espera */}
         <div className="lg:col-span-2 space-y-5">
-          {/* Ruta completa (aparecen en ambos pisos) */}
-          {esperandoCompleta.length > 0 && (
-            <div className="card border-l-4 border-purple-500">
-              <h3 className="text-base font-bold text-purple-700 mb-4 flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-purple-500 inline-block" />
-                Ruta Completa – Todos los pisos
-                <span className="ml-auto bg-purple-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
-                  {esperandoCompleta.length} en espera
+
+          {/* Ruta Completa + Personalizada */}
+          {esperandoMulti.length > 0 && (
+            <div className="card border-l-4 border-indigo-500">
+              <h3 className="text-base font-bold text-indigo-700 mb-4 flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-indigo-500 inline-block" />
+                Múltiples Consultorios
+                <span className="ml-auto bg-indigo-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                  {esperandoMulti.length} en espera
                 </span>
               </h3>
               <div className="space-y-2">
-                {esperandoCompleta.map((p, i) => (
-                  <div key={p.id} className="flex items-center gap-3 bg-purple-50 rounded-xl px-4 py-3 animate-fade-in">
-                    <span className="text-2xl font-black text-purple-200 w-8 text-center">{i + 1}</span>
-                    <div className="flex-1">
-                      <span className="font-bold text-purple-700 mr-2">{p.turno}</span>
-                      <span className="font-semibold text-gray-700">{p.nombre}</span>
-                      <span className="block text-xs text-purple-400 mt-0.5">
-                        {p.consultoriosVisitados.length}/6 servicios visitados
-                        {p.consultoriosVisitados.length > 0 && ` · Pendientes: ${6 - p.consultoriosVisitados.length}`}
-                      </span>
+                {esperandoMulti.map((p, i) => {
+                  const total = p.tipo === 'personalizada'
+                    ? (p.consultoriosAsignados?.length ?? 0)
+                    : (estado?.consultorios.filter(c => c.activo).length ?? 6)
+                  const pendientes = total - (p.consultoriosVisitados?.length ?? 0)
+                  const esPersonalizada = p.tipo === 'personalizada'
+                  return (
+                    <div key={p.id} className={`flex items-center gap-3 rounded-xl px-4 py-3 animate-fade-in ${esPersonalizada ? 'bg-indigo-50' : 'bg-purple-50'}`}>
+                      <span className={`text-2xl font-black w-8 text-center ${esPersonalizada ? 'text-indigo-200' : 'text-purple-200'}`}>{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`font-bold ${esPersonalizada ? 'text-indigo-700' : 'text-purple-700'}`}>{p.turno}</span>
+                          <span className="font-semibold text-gray-700">{p.nombre}</span>
+                          <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${esPersonalizada ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'}`}>
+                            {esPersonalizada ? 'Personalizada' : 'Completa'} · {pendientes} pendiente{pendientes !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        {esPersonalizada && p.consultoriosAsignados && (
+                          <div className="flex gap-1 mt-1 flex-wrap">
+                            {p.consultoriosAsignados.map(cid => {
+                              const c = estado?.consultorios.find(x => x.id === cid)
+                              const visitado = p.consultoriosVisitados?.includes(cid)
+                              return c ? (
+                                <span key={cid} className={`text-xs px-1.5 py-0.5 rounded-full ${visitado ? 'bg-gray-100 text-gray-400 line-through' : 'bg-indigo-100 text-indigo-600'}`}>
+                                  {c.nombre}
+                                </span>
+                              ) : null
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-400 flex-shrink-0">{horaLocal(p.horaIngreso)}</span>
+                      <button onClick={() => eliminar(p.id)} className="text-red-400 hover:text-red-600 transition-colors p-1 rounded-lg hover:bg-red-50 flex-shrink-0" title="Eliminar">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
                     </div>
-                    <span className="text-xs text-gray-400">{horaLocal(p.horaIngreso)}</span>
-                    <button onClick={() => eliminar(p.id)} className="text-red-400 hover:text-red-600 transition-colors p-1 rounded-lg hover:bg-red-50" title="Eliminar">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
@@ -292,14 +407,14 @@ export default function Recepcion() {
               <span className="w-3 h-3 rounded-full bg-ryr-orange inline-block" />
               Piso 1 – Psicología · Medicina Ocupacional · Lab. Clínico
               <span className="ml-auto bg-ryr-orange text-white text-xs font-bold px-2.5 py-1 rounded-full">
-                {esperandoPiso1.filter(p => (p.tipo ?? 'simple') === 'simple').length} esperando
+                {esperandoPiso1.length} esperando
               </span>
             </h3>
-            {esperandoPiso1.filter(p => (p.tipo ?? 'simple') === 'simple').length === 0 ? (
+            {esperandoPiso1.length === 0 ? (
               <p className="text-gray-400 text-sm text-center py-4">Sin pacientes en espera</p>
             ) : (
               <div className="space-y-2">
-                {esperandoPiso1.filter(p => (p.tipo ?? 'simple') === 'simple').map((p, i) => (
+                {esperandoPiso1.map((p, i) => (
                   <div key={p.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3 animate-fade-in">
                     <span className="text-2xl font-black text-ryr-orange/30 w-8 text-center">{i + 1}</span>
                     <div className="flex-1">
@@ -322,14 +437,14 @@ export default function Recepcion() {
               <span className="w-3 h-3 rounded-full bg-ryr-teal inline-block" />
               Piso 2 – Optometría · Fonoaudiología · Enfermería
               <span className="ml-auto bg-ryr-teal text-white text-xs font-bold px-2.5 py-1 rounded-full">
-                {esperandoPiso2.filter(p => (p.tipo ?? 'simple') === 'simple').length} esperando
+                {esperandoPiso2.length} esperando
               </span>
             </h3>
-            {esperandoPiso2.filter(p => (p.tipo ?? 'simple') === 'simple').length === 0 ? (
+            {esperandoPiso2.length === 0 ? (
               <p className="text-gray-400 text-sm text-center py-4">Sin pacientes en espera</p>
             ) : (
               <div className="space-y-2">
-                {esperandoPiso2.filter(p => (p.tipo ?? 'simple') === 'simple').map((p, i) => (
+                {esperandoPiso2.map((p, i) => (
                   <div key={p.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3 animate-fade-in">
                     <span className="text-2xl font-black text-ryr-teal/30 w-8 text-center">{i + 1}</span>
                     <div className="flex-1">

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
-import type { UltimoLlamado, EstadoAPI } from '@/lib/types'
+import type { UltimoLlamado, EstadoAPI, VideoItem } from '@/lib/types'
 
 function toggleFullscreen() {
   if (typeof document === 'undefined') return
@@ -60,6 +60,8 @@ export default function SalaPage({ params }: { params: { id: string } }) {
   const ultimoTimestampRef = useRef<string | null>(null)
   const [hora, setHora] = useState('')
   const [fecha, setFecha] = useState('')
+  const [videoActivo, setVideoActivo] = useState<VideoItem | null>(null)
+  const videoLoadedRef = useRef(false)
 
   const cargarEstado = useCallback(async () => {
     try {
@@ -108,7 +110,20 @@ export default function SalaPage({ params }: { params: { id: string } }) {
   const pisoSala = salaNum === 1 ? 1 : 2
   const salaLabel = salaNum === 1 ? 'SALA DE ESPERA – PISO 1' : 'SALA DE ESPERA – PISO 2'
 
-  const embedUrl = getYouTubeEmbedUrl(estado?.media?.videoUrl ?? '')
+  // Selección aleatoria de video al cargar la playlist
+  useEffect(() => {
+    const playlist = estado?.media?.playlist ?? []
+    if (playlist.length === 0) {
+      videoLoadedRef.current = false
+      setVideoActivo(null)
+    } else if (!videoLoadedRef.current) {
+      videoLoadedRef.current = true
+      setVideoActivo(playlist[Math.floor(Math.random() * playlist.length)])
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estado?.media?.playlist?.length])
+
+  const embedUrl = videoActivo?.tipo === 'youtube' ? getYouTubeEmbedUrl(videoActivo.url) : null
 
   const piso = ultimo?.piso ?? pisoSala
   const esPisoUno = piso === 1
@@ -158,7 +173,16 @@ export default function SalaPage({ params }: { params: { id: string } }) {
 
         {/* Left: Video / Info slide */}
         <div className="flex-1 bg-[#060D1A] relative overflow-hidden border-r border-white/5">
-          {embedUrl ? (
+          {videoActivo?.tipo === 'propio' ? (
+            <video
+              src={videoActivo.url}
+              className="w-full h-full object-cover"
+              autoPlay
+              muted
+              loop
+              playsInline
+            />
+          ) : embedUrl ? (
             <iframe
               src={embedUrl}
               className="w-full h-full"

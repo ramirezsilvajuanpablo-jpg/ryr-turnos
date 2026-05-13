@@ -102,12 +102,12 @@ export default function ConsultorioPage({ params }: { params: { id: string } }) 
     p => p.consultoioId === id && (p.estado === 'llamado' || p.estado === 'en_atencion')
   )
 
-  // Cola: pacientes simples de esta sala + pacientes completa que no han visitado este consultorio
   const enEspera: Paciente[] = (estado?.pacientes ?? [])
     .filter(p => {
       if (p.estado !== 'esperando') return false
       const visitados = p.consultoriosVisitados ?? []
       if (visitados.includes(id)) return false
+      if (p.tipo === 'personalizada') return (p.consultoriosAsignados ?? []).includes(id)
       if ((p.tipo ?? 'simple') === 'completa') return true
       return p.sala === (consultorio?.sala ?? 1)
     })
@@ -192,7 +192,12 @@ export default function ConsultorioPage({ params }: { params: { id: string } }) 
                 <div className="flex items-center gap-3 mb-1">
                   <span className={`text-4xl font-black ${accentColor}`}>{pacienteActual.turno}</span>
                   <span className="badge-llamado animate-pulse">En atención</span>
-                  {(pacienteActual.tipo ?? 'simple') === 'completa' && (
+                  {pacienteActual.tipo === 'personalizada' && (
+                    <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                      Personalizada · {(pacienteActual.consultoriosVisitados?.length ?? 0) + 1}/{pacienteActual.consultoriosAsignados?.length ?? 0}
+                    </span>
+                  )}
+                  {pacienteActual.tipo === 'completa' && (
                     <span className="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">
                       Ruta completa · {(pacienteActual.consultoriosVisitados?.length ?? 0) + 1}/{totalActivos}
                     </span>
@@ -218,7 +223,14 @@ export default function ConsultorioPage({ params }: { params: { id: string } }) 
               <div className="flex flex-col gap-2">
                 <button onClick={finalizarAtencion} disabled={cargando} className="btn-danger disabled:opacity-50">
                   Finalizar atención
-                  {(pacienteActual.tipo ?? 'simple') === 'completa' && (
+                  {pacienteActual.tipo === 'personalizada' && (
+                    <span className="block text-xs font-normal opacity-80">
+                      {(pacienteActual.consultoriosVisitados?.length ?? 0) + 1 < (pacienteActual.consultoriosAsignados?.length ?? 0)
+                        ? `→ regresa a sala de espera`
+                        : `→ atención completa`}
+                    </span>
+                  )}
+                  {pacienteActual.tipo === 'completa' && (
                     <span className="block text-xs font-normal opacity-80">
                       {(pacienteActual.consultoriosVisitados?.length ?? 0) + 1 < totalActivos
                         ? `→ regresa a sala de espera`
@@ -257,18 +269,33 @@ export default function ConsultorioPage({ params }: { params: { id: string } }) 
             </h2>
             <div className="space-y-2">
               {enEspera.map((p, i) => {
-                const esCompleta = (p.tipo ?? 'simple') === 'completa'
+                const esCompleta = p.tipo === 'completa'
+                const esPersonalizada = p.tipo === 'personalizada'
+                const esMulti = esCompleta || esPersonalizada
                 const visitados = p.consultoriosVisitados?.length ?? 0
+                const totalP = esPersonalizada
+                  ? (p.consultoriosAsignados?.length ?? 0)
+                  : totalActivos
                 return (
-                  <div key={p.id} className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-colors group ${esCompleta ? 'bg-purple-50 hover:bg-purple-100' : 'bg-gray-50 hover:bg-gray-100'}`}>
-                    <span className={`text-xl font-black w-6 text-center ${esCompleta ? 'text-purple-200' : 'text-gray-300'}`}>{i + 1}</span>
+                  <div key={p.id} className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-colors group ${
+                    esPersonalizada ? 'bg-indigo-50 hover:bg-indigo-100' :
+                    esCompleta ? 'bg-purple-50 hover:bg-purple-100' :
+                    'bg-gray-50 hover:bg-gray-100'
+                  }`}>
+                    <span className={`text-xl font-black w-6 text-center ${
+                      esPersonalizada ? 'text-indigo-200' : esCompleta ? 'text-purple-200' : 'text-gray-300'
+                    }`}>{i + 1}</span>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className={`font-bold ${esCompleta ? 'text-purple-600' : accentColor}`}>{p.turno}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`font-bold ${
+                          esPersonalizada ? 'text-indigo-600' : esCompleta ? 'text-purple-600' : accentColor
+                        }`}>{p.turno}</span>
                         <span className="font-semibold text-gray-700">{p.nombre}</span>
-                        {esCompleta && (
-                          <span className="text-xs bg-purple-100 text-purple-600 font-bold px-1.5 py-0.5 rounded-full">
-                            {visitados}/{totalActivos}
+                        {esMulti && (
+                          <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                            esPersonalizada ? 'bg-indigo-100 text-indigo-600' : 'bg-purple-100 text-purple-600'
+                          }`}>
+                            {visitados}/{totalP}
                           </span>
                         )}
                       </div>
@@ -277,7 +304,9 @@ export default function ConsultorioPage({ params }: { params: { id: string } }) 
                     <button
                       onClick={() => llamarEspecifico(p.id)}
                       disabled={cargando}
-                      className={`opacity-0 group-hover:opacity-100 transition-opacity text-sm py-1.5 px-3 rounded-xl font-semibold text-white disabled:opacity-50 ${esCompleta ? 'bg-purple-600' : accentBg}`}
+                      className={`opacity-0 group-hover:opacity-100 transition-opacity text-sm py-1.5 px-3 rounded-xl font-semibold text-white disabled:opacity-50 ${
+                        esPersonalizada ? 'bg-indigo-600' : esCompleta ? 'bg-purple-600' : accentBg
+                      }`}
                     >
                       Llamar
                     </button>

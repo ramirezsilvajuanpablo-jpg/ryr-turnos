@@ -16,14 +16,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Consultorio no encontrado' }, { status: 404 })
   }
 
-  // Un paciente es elegible para este consultorio si:
-  // - está esperando
-  // - NO ha visitado este consultorio antes
-  // - es "simple" y pertenece a esta sala, O es "completa" (puede ir a cualquier consultorio)
   function esElegible(p: typeof pacientes[number]) {
     if (p.estado !== 'esperando') return false
     const visitados = p.consultoriosVisitados ?? []
     if (visitados.includes(consultoioId)) return false
+    if (p.tipo === 'personalizada') {
+      return (p.consultoriosAsignados ?? []).includes(consultoioId)
+    }
     if ((p.tipo ?? 'simple') === 'completa') return true
     return p.sala === consultorio!.sala
   }

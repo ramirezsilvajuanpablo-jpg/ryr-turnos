@@ -3,7 +3,8 @@ export interface Paciente {
   nombre: string
   turno: string
   sala: 1 | 2
-  tipo: 'simple' | 'completa'
+  tipo: 'simple' | 'completa' | 'personalizada'
+  consultoriosAsignados: string[]
   consultoriosVisitados: string[]
   estado: 'esperando' | 'llamado' | 'en_atencion' | 'atendido'
   consultoioId?: string
@@ -26,12 +27,19 @@ export interface UltimoLlamado {
   consultorioNombre: string
   sala: 1 | 2
   piso: 1 | 2
-  tipo: 'simple' | 'completa'
+  tipo: 'simple' | 'completa' | 'personalizada'
   timestamp: string
 }
 
+export interface VideoItem {
+  id: string
+  tipo: 'youtube' | 'propio'
+  url: string
+  nombre: string
+}
+
 export interface MediaConfig {
-  videoUrl: string
+  playlist: VideoItem[]
 }
 
 export interface EstadoAPI {

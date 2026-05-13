@@ -11,7 +11,12 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { nombre, sala, tipo } = body as { nombre: string; sala: 1 | 2; tipo?: 'simple' | 'completa' }
+  const { nombre, sala, tipo, consultoriosAsignados } = body as {
+    nombre: string
+    sala: 1 | 2
+    tipo?: 'simple' | 'completa' | 'personalizada'
+    consultoriosAsignados?: string[]
+  }
 
   if (!nombre?.trim()) {
     return NextResponse.json({ error: 'Nombre requerido' }, { status: 400 })
@@ -25,8 +30,9 @@ export async function POST(req: NextRequest) {
     id: crypto.randomUUID(),
     nombre: nombre.trim().toUpperCase(),
     turno,
-    sala: rutaTipo === 'completa' ? 1 : sala,
+    sala: (rutaTipo === 'completa' || rutaTipo === 'personalizada') ? 1 : sala,
     tipo: rutaTipo,
+    consultoriosAsignados: rutaTipo === 'personalizada' ? (consultoriosAsignados ?? []) : [],
     consultoriosVisitados: [],
     estado: 'esperando',
     horaIngreso: new Date().toISOString(),

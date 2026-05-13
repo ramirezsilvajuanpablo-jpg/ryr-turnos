@@ -9,7 +9,7 @@ const DEFAULT_CONSULTORIOS: Consultorio[] = [
   { id: '6', nombre: 'Enfermería',           sala: 2, piso: 2, doctor: 'Enfermero/a',           activo: true },
 ]
 
-const DEFAULT_MEDIA: MediaConfig = { videoUrl: '' }
+const DEFAULT_MEDIA: MediaConfig = { playlist: [] }
 
 // ──────────────────────────────────────────────────────────────
 // In-memory store (dev / fallback)
@@ -128,7 +128,14 @@ export async function getHistorial(): Promise<UltimoLlamado[]> {
 export async function getMediaConfig(): Promise<MediaConfig> {
   if (useKV) {
     const db = await kv()
-    return (await db.get<MediaConfig>(KV_KEYS.media)) ?? DEFAULT_MEDIA
+    const data = await db.get<any>(KV_KEYS.media)
+    if (!data) return DEFAULT_MEDIA
+    // backward compat: old format had { videoUrl: string }
+    if ('videoUrl' in data && !('playlist' in data)) {
+      const url = data.videoUrl as string
+      return { playlist: url ? [{ id: '1', tipo: 'youtube', url, nombre: 'Video' }] : [] }
+    }
+    return data as MediaConfig
   }
   return mem().media
 }
