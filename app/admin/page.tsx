@@ -77,9 +77,13 @@ export default function Admin() {
     formData.append('file', archivoVideo)
     try {
       const res = await fetch('/api/upload', { method: 'POST', body: formData })
-      const data = await res.json()
+      let data: { url?: string; nombre?: string; error?: string } = {}
+      try { data = await res.json() } catch { /* respuesta no-JSON */ }
       if (!res.ok) {
-        setUploadMsg(data.error || 'Error al subir')
+        setUploadMsg(
+          data.error ||
+          (res.status === 503 ? 'Vercel Blob no está configurado. Ve a vercel.com → tu proyecto → Storage → Create Blob Store.' : `Error ${res.status} al subir el archivo`)
+        )
         setSubiendo(false)
         return
       }
