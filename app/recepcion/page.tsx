@@ -162,42 +162,42 @@ export default function Recepcion() {
                 <label className="block text-sm font-semibold text-gray-600 mb-1.5">
                   Tipo de atención
                 </label>
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className="flex rounded-xl overflow-hidden border-2 border-gray-200">
                   <button
                     type="button"
                     onClick={() => setTipo('simple')}
-                    className={`p-2.5 rounded-xl border-2 text-left transition-all ${
+                    className={`flex-1 py-2.5 px-1 text-center transition-all border-r border-gray-200 ${
                       tipo === 'simple'
-                        ? 'border-ryr-blue bg-ryr-blue text-white'
-                        : 'border-gray-200 hover:border-ryr-blue/50 text-gray-700'
+                        ? 'bg-ryr-blue text-white border-r-ryr-blue'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
                     }`}
                   >
                     <div className="font-bold text-xs">Simple</div>
-                    <div className={`text-xs ${tipo === 'simple' ? 'text-blue-200' : 'text-gray-400'}`}>1 consultorio</div>
+                    <div className={`text-[10px] ${tipo === 'simple' ? 'text-blue-200' : 'text-gray-400'}`}>1 consul.</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => { setTipo('personalizada'); setConsultoriosSeleccionados([]) }}
-                    className={`p-2.5 rounded-xl border-2 text-left transition-all ${
+                    className={`flex-1 py-2.5 px-1 text-center transition-all border-r border-gray-200 ${
                       tipo === 'personalizada'
-                        ? 'border-indigo-600 bg-indigo-600 text-white'
-                        : 'border-gray-200 hover:border-indigo-400/50 text-gray-700'
+                        ? 'bg-indigo-600 text-white border-r-indigo-600'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
                     }`}
                   >
-                    <div className="font-bold text-[10px] leading-tight">Personalizada</div>
-                    <div className={`text-[10px] leading-tight ${tipo === 'personalizada' ? 'text-indigo-200' : 'text-gray-400'}`}>Escoge</div>
+                    <div className="font-bold text-xs">Personal</div>
+                    <div className={`text-[10px] ${tipo === 'personalizada' ? 'text-indigo-200' : 'text-gray-400'}`}>Escoge</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => setTipo('completa')}
-                    className={`p-2.5 rounded-xl border-2 text-left transition-all ${
+                    className={`flex-1 py-2.5 px-1 text-center transition-all ${
                       tipo === 'completa'
-                        ? 'border-purple-600 bg-purple-600 text-white'
-                        : 'border-gray-200 hover:border-purple-400/50 text-gray-700'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
                     }`}
                   >
                     <div className="font-bold text-xs">Completa</div>
-                    <div className={`text-xs ${tipo === 'completa' ? 'text-purple-200' : 'text-gray-400'}`}>6 consult.</div>
+                    <div className={`text-[10px] ${tipo === 'completa' ? 'text-purple-200' : 'text-gray-400'}`}>6 consul.</div>
                   </button>
                 </div>
               </div>
