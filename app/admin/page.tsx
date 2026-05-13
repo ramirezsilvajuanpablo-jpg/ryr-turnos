@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { upload } from '@vercel/blob/client'
 import type { Consultorio, EstadoAPI } from '@/lib/types'
 import LogoutButton from '@/components/LogoutButton'
 
@@ -74,24 +75,15 @@ export default function Admin() {
     if (!archivoVideo) return
     setSubiendo(true)
     setUploadMsg('')
-    const formData = new FormData()
-    formData.append('file', archivoVideo)
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: formData })
-      let data: { url?: string; nombre?: string; error?: string } = {}
-      try { data = await res.json() } catch { /* respuesta no-JSON */ }
-      if (!res.ok) {
-        setUploadMsg(
-          data.error ||
-          (res.status === 503 ? 'Vercel Blob no está configurado. Ve a vercel.com → tu proyecto → Storage → Create Blob Store.' : `Error ${res.status} al subir el archivo`)
-        )
-        setSubiendo(false)
-        return
-      }
+      const blob = await upload(archivoVideo.name, archivoVideo, {
+        access: 'public',
+        handleUploadUrl: '/api/upload',
+      })
       const item = {
         id: crypto.randomUUID(),
         tipo: 'propio' as const,
-        url: data.url,
+        url: blob.url,
         nombre: nombreVideo.trim() || archivoVideo.name,
       }
       await fetch('/api/media', {
@@ -104,8 +96,8 @@ export default function Admin() {
       setMsg('✓ Video subido y agregado a la biblioteca')
       setTimeout(() => setMsg(''), 3000)
       cargar()
-    } catch {
-      setUploadMsg('Error de conexión al subir')
+    } catch (err) {
+      setUploadMsg(err instanceof Error ? err.message : 'Error al subir el video')
     }
     setSubiendo(false)
   }

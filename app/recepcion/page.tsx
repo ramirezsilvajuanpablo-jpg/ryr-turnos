@@ -184,8 +184,8 @@ export default function Recepcion() {
                         : 'border-gray-200 hover:border-indigo-400/50 text-gray-700'
                     }`}
                   >
-                    <div className="font-bold text-xs">Personalizada</div>
-                    <div className={`text-xs ${tipo === 'personalizada' ? 'text-indigo-200' : 'text-gray-400'}`}>Escoge</div>
+                    <div className="font-bold text-[10px] leading-tight">Personalizada</div>
+                    <div className={`text-[10px] leading-tight ${tipo === 'personalizada' ? 'text-indigo-200' : 'text-gray-400'}`}>Escoge</div>
                   </button>
                   <button
                     type="button"
