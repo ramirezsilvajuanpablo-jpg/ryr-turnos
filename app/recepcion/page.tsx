@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import type { Paciente, EstadoAPI } from '@/lib/types'
+import LogoutButton from '@/components/LogoutButton'
 
 function horaLocal(iso: string) {
   return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
@@ -101,7 +102,7 @@ export default function Recepcion() {
             <h1 className="text-xl font-bold">Recepción</h1>
             <p className="text-xs text-blue-200">R&amp;R Centro de Medicina y Optometría</p>
           </div>
-          <div className="ml-auto flex gap-2 text-sm flex-wrap">
+          <div className="ml-auto flex items-center gap-2 text-sm flex-wrap">
             <span className="bg-ryr-orange/30 border border-ryr-orange/50 rounded-lg px-3 py-1">
               Piso 1: <strong>{esperandoPiso1.length}</strong>
             </span>
@@ -113,6 +114,7 @@ export default function Recepcion() {
                 Multi: <strong>{esperandoMulti.length}</strong>
               </span>
             )}
+            <LogoutButton />
           </div>
         </div>
       </header>

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import type { Consultorio, EstadoAPI } from '@/lib/types'
+import LogoutButton from '@/components/LogoutButton'
 
 function horaLocal(iso: string) {
   return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
@@ -150,6 +151,7 @@ export default function Admin() {
             <h1 className="text-xl font-bold">Administración</h1>
             <p className="text-xs text-blue-200">R&amp;R Centro de Medicina y Optometría</p>
           </div>
+          <LogoutButton />
         </div>
       </header>
 

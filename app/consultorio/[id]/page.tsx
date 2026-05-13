@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import type { Paciente, Consultorio, EstadoAPI } from '@/lib/types'
+import LogoutButton from '@/components/LogoutButton'
 
 function horaLocal(iso: string) {
   return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
@@ -161,10 +162,11 @@ export default function ConsultorioPage({ params }: { params: { id: string } }) 
             </div>
             <p className="text-xs text-white/70">{consultorio.doctor}</p>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-3">
             <span className="bg-white/20 rounded-lg px-3 py-1 text-sm">
               {enEspera.length} en espera
             </span>
+            <LogoutButton />
           </div>
         </div>
       </header>
